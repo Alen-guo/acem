@@ -1,0 +1,31 @@
+{
+    "name": "acrm-system",
+    "version": "1.0.0",
+    "description": "Advanced Customer Relationship Management System for Sales Teams",
+    "main": "server/app.js",
+    "scripts": {
+        "dev": "concurrently \"npm run server\" \"npm run client\"",
+        "server": "cd server && nodemon app.js",
+        "client": "cd client && npm start",
+        "build": "cd client && npm run build",
+        "install-server": "cd server && npm install",
+        "install-client": "cd client && npm install",
+        "install-all": "npm run install-server && npm run install-client",
+        "start": "cd server && npm start"
+    },
+    "keywords": [
+        "crm",
+        "sales",
+        "customer-management",
+        "b2b"
+    ],
+    "author": "Your Name",
+    "license": "MIT",
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "dependencies": {
+        "@types/react-sortable-hoc": "^0.6.6",
+        "react-sortable-hoc": "^2.0.0"
+    }
+}

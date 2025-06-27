@@ -1,0 +1,300 @@
+# ACRM 信息管理系统 - Cursor 规则配置
+
+## 项目概述
+这是一个专注于销售人员使用的信息管理工具，核心功能包括：
+- 客户信息管理（特点、喜好、标签）
+- 关系网络记录和可视化
+- 资源盘点管理
+- 合作意向跟踪
+- 联系记录管理
+
+## 技术栈
+- 前端：React 18 + TypeScript + Ant Design 5.x
+- 后端：Node.js + Express + MongoDB
+- 状态管理：Zustand + React Query
+- 构建工具：Vite
+- 部署：Vercel + Railway
+
+## 代码风格规范
+
+### TypeScript 规则
+- 优先使用 TypeScript，所有新文件使用 .tsx/.ts 扩展名
+- 严格类型检查，避免使用 any 类型
+- 为所有组件、函数、API 接口定义明确的类型
+- 使用 interface 而不是 type 定义对象类型
+- 导出的组件必须有 Props 类型定义
+
+### React 组件规范
+- 使用函数式组件 + Hooks
+- 组件名称使用 PascalCase
+- 文件名与组件名保持一致
+- 优先使用 React.FC 类型定义
+- 使用 useState、useEffect 等官方 Hooks
+- 自定义 Hooks 以 use 开头
+
+### Ant Design 使用规范
+- 优先使用 Ant Design 组件，保持界面一致性
+- 使用 ConfigProvider 统一主题配置
+- 表单使用 Form 组件，配合 Form.Item
+- 图标使用 @ant-design/icons
+- 遵循 Ant Design 设计语言
+
+### 文件组织规则
+```
+client/src/
+├── components/          # 通用组件
+│   ├── Layout/         # 布局组件
+│   ├── NetworkGraph/   # 关系网络图组件
+│   └── Modals/         # 弹窗组件
+├── pages/              # 页面组件
+│   ├── CustomerList/   # 客户列表页
+│   ├── CustomerDetail/ # 客户详情页
+│   └── Dashboard/      # 仪表板页
+├── store/              # 状态管理
+├── utils/              # 工具函数
+├── types/              # 类型定义
+└── services/           # API 服务
+
+server/
+├── models/             # 数据模型
+├── routes/             # 路由定义
+├── middleware/         # 中间件
+├── utils/              # 工具函数
+└── services/           # 业务逻辑
+```
+
+### 命名约定
+- 变量名：camelCase（customerList, contactRecord）
+- 常量：UPPER_SNAKE_CASE（API_BASE_URL, MAX_FILE_SIZE）
+- 组件：PascalCase（CustomerDetail, NetworkGraph）
+- 文件名：kebab-case 或 PascalCase（customer-list.tsx, CustomerList.tsx）
+- API 端点：kebab-case（/api/customers, /api/contact-records）
+
+### 注释规范
+- 复杂业务逻辑必须添加中文注释
+- 组件顶部添加功能说明注释
+- API 接口添加参数和返回值说明
+- 使用 JSDoc 格式注释公共函数
+
+```typescript
+/**
+ * 客户详情组件
+ * 功能：展示客户基本信息、特点、关系网络、资源盘点等
+ */
+const CustomerDetail: React.FC<CustomerDetailProps> = ({ customerId }) => {
+  // 获取客户数据
+  const { data: customer, loading } = useQuery(['customer', customerId], fetchCustomer);
+  
+  // 处理客户信息更新
+  const handleUpdateCustomer = (data: CustomerUpdateData) => {
+    // 业务逻辑...
+  };
+  
+  return (
+    // JSX...
+  );
+};
+```
+
+## 数据库和API 规范
+
+### MongoDB 集合命名
+- customers：客户信息
+- contactrecords：联系记录
+- users：用户信息
+- 使用小写 + 复数形式
+
+### API 设计规范
+- RESTful 风格：GET /api/customers, POST /api/customers
+- 统一响应格式：
+```typescript
+{
+  status: 'success' | 'error',
+  message: string,
+  data?: any,
+  pagination?: {
+    current: number,
+    total: number,
+    count: number
+  }
+}
+```
+
+### 环境变量命名
+- 使用 UPPER_SNAKE_CASE
+- 按功能分组：DB_*, JWT_*, SMTP_*
+- 示例：MONGODB_URI, JWT_SECRET, FRONTEND_URL
+
+## 业务逻辑规范
+
+### 客户信息管理
+- 客户 ID 使用 MongoDB ObjectId
+- 必填字段：name, email, assignedSalesperson
+- 标签使用数组存储，支持多标签
+- 合作意向评分：1-10 整数
+
+### 关系网络
+- 关系强度：0-1 浮点数
+- 关系类型：使用枚举值（上下级、合作伙伴、推荐人等）
+- 支持双向关系和单向关系
+
+### 资源盘点
+- 资源类型：资金、渠道、人脉、技术等
+- 价值评估：高、中、低
+- 可用性状态：可用、部分可用、不可用
+
+### 联系记录
+- 联系方式枚举：电话、邮件、微信、WhatsApp、面谈、视频会议
+- 联系结果评级：非常好、好、一般、不理想、失败
+- 自动更新客户的联系次数和最后联系时间
+
+## 性能优化规范
+
+### 前端优化
+- 使用 React.memo 避免不必要的重渲染
+- 大列表使用虚拟滚动或分页
+- 图片使用懒加载
+- 路由使用代码分割（React.lazy）
+
+### 后端优化
+- 数据库查询添加索引
+- 使用 MongoDB aggregation 进行复杂查询
+- API 响应使用分页
+- 静态资源使用 CDN
+
+### 数据库索引
+```javascript
+// 必要的索引
+db.customers.createIndex({ assignedSalesperson: 1, updatedAt: -1 });
+db.contactrecords.createIndex({ customer: 1, contactDate: -1 });
+db.users.createIndex({ email: 1 }, { unique: true });
+```
+
+## 安全规范
+
+### 前端安全
+- 所有用户输入进行验证和清理
+- 敏感信息不存储在 localStorage
+- API 调用使用 HTTPS
+- 表单验证使用 yup 或 joi
+
+### 后端安全
+- 使用 JWT 进行身份认证
+- 密码使用 bcrypt 哈希
+- API 添加速率限制
+- 输入验证和 SQL 注入防护
+- 使用 helmet 中间件设置安全头
+
+## 错误处理规范
+
+### 前端错误处理
+- 使用 try-catch 包装异步操作
+- 网络错误显示用户友好的提示
+- 表单验证错误实时显示
+- 全局错误边界捕获组件错误
+
+### 后端错误处理
+- 统一错误响应格式
+- 记录详细错误日志
+- 生产环境不暴露敏感错误信息
+- 数据库操作错误处理
+
+## 测试规范
+
+### 单元测试
+- 组件测试使用 React Testing Library
+- 工具函数测试覆盖率 > 80%
+- API 接口测试使用 Jest + Supertest
+- 数据库操作测试使用内存数据库
+
+### 集成测试
+- 关键业务流程端到端测试
+- 用户登录和权限测试
+- 数据 CRUD 操作测试
+
+## 国际化规范
+
+### 多语言支持
+- 使用 react-i18next
+- 所有显示文本使用翻译 key
+- 默认语言：中文简体
+- 支持语言：中文、英文
+
+### 日期和数字格式
+- 使用 dayjs 处理日期
+- 金额显示添加千分位分隔符
+- 时区处理使用 UTC
+
+## Git 提交规范
+
+### 提交信息格式
+```
+类型(范围): 描述
+
+类型：
+- feat: 新功能
+- fix: 修复问题
+- docs: 文档更新
+- style: 代码格式修改
+- refactor: 代码重构
+- test: 测试相关
+- chore: 构建过程或辅助工具的变动
+
+示例：
+feat(客户管理): 添加客户关系网络可视化功能
+fix(联系记录): 修复联系时间显示错误
+docs(README): 更新部署指南
+```
+
+### 分支管理
+- main: 生产环境分支
+- develop: 开发分支
+- feature/功能名: 功能开发分支
+- hotfix/问题描述: 紧急修复分支
+
+## 部署规范
+
+### 环境配置
+- 开发环境：本地 MongoDB + Node.js
+- 测试环境：Docker 容器
+- 生产环境：Vercel + Railway + MongoDB Atlas
+
+### 构建优化
+- 前端资源压缩和代码分割
+- 后端使用 PM2 进程管理
+- 数据库连接池配置
+- 静态资源 CDN 加速
+
+## 监控和日志
+
+### 应用监控
+- 前端错误监控
+- API 响应时间监控
+- 数据库性能监控
+- 用户行为分析
+
+### 日志记录
+- 按级别记录日志：error, warn, info, debug
+- 敏感信息脱敏处理
+- 日志轮转和归档
+- 生产环境日志集中管理
+
+## 代码审查规范
+
+### 审查要点
+- 代码是否符合规范
+- 业务逻辑是否正确
+- 性能是否优化
+- 安全问题是否考虑
+- 测试覆盖是否充分
+
+### 必须审查的内容
+- 数据库 Schema 修改
+- API 接口变更
+- 权限相关代码
+- 第三方库的引入
+- 生产环境配置修改
+
+---
+
+遵循以上规范，确保代码质量和项目的可维护性。如有疑问或需要修改规范，请及时沟通讨论。 

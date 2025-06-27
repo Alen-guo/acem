@@ -1,0 +1,276 @@
+/* 全局样式 */
+.App {
+    min-height: 100vh;
+}
+
+/* 头像上传样式 */
+.avatar-uploader {
+    position: relative;
+    display: inline-block;
+}
+
+.avatar-uploader .ant-upload {
+    border: none !important;
+    background: transparent !important;
+}
+
+.avatar-uploader .ant-upload:hover {
+    border: none !important;
+}
+
+/* 自定义滚动条 */
+.ant-layout-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ant-layout-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.ant-layout-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.ant-layout-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 表格样式优化 */
+.ant-table-tbody>tr>td {
+    padding: 12px 16px;
+}
+
+.ant-table-thead>tr>th {
+    background: #fafafa;
+    font-weight: 600;
+}
+
+/* 可编辑表格样式 */
+.editable-row .ant-form-item {
+    margin-bottom: 0;
+}
+
+.editable-row.editing {
+    background-color: #ffffff !important;
+}
+
+.editable-row.editing:hover {
+    background-color: #ffffff !important;
+    /* background-color: #93cbe9 !important; */
+
+}
+
+.editable-row.editing td {
+    border-color: #52c41a;
+}
+
+/* 序号列样式 */
+.sequence-column {
+    text-align: center;
+    font-weight: 500;
+    background-color: #fafafa;
+}
+
+/* 拖拽样式 */
+.ant-table-tbody>tr {
+    transition: all 0.2s ease;
+}
+
+.ant-table-tbody>tr {
+    background-color: #ffffff;
+
+}
+
+.ant-table-tbody>tr:hover {
+    /* background-color: #f0f8ff; */
+    /* background-color: #bae7ff !important; */
+
+}
+
+.ant-table-tbody>tr.sortable-chosen {
+    /* background-color: #bae7ff !important; */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.ant-table-tbody>tr.sortable-ghost {
+    opacity: 0.3;
+}
+
+/* 拖拽手柄样式 */
+.drag-handle {
+    cursor: move;
+    color: #999;
+    font-size: 16px;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.drag-handle:hover {
+    color: #1890ff;
+    background-color: #f0f0f0;
+    transform: scale(1.1);
+}
+
+.drag-handle:active {
+    color: #0050b3;
+    background-color: #e6f7ff;
+}
+
+/* 拖拽列样式 */
+.drag-column {
+    text-align: center !important;
+    padding: 8px 4px !important;
+    background-color: #fafafa;
+    border-right: 1px solid #f0f0f0 !important;
+}
+
+/* 统计卡片样式 */
+.ant-statistic-title {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.ant-statistic-content {
+    font-size: 24px;
+    font-weight: 600;
+}
+
+/* 标签样式 */
+.ant-tag {
+    border-radius: 12px;
+    font-size: 12px;
+    padding: 2px 8px;
+}
+
+/* 进度条样式 */
+.ant-progress-line {
+    margin-bottom: 0;
+}
+
+/* 卡片样式 */
+.ant-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.ant-card-head {
+    border-bottom: 1px solid #f0f0f0;
+    font-weight: 600;
+}
+
+/* 表单样式 */
+.ant-form-item-label>label {
+    font-weight: 500;
+}
+
+/* 菜单样式 */
+.ant-menu-dark .ant-menu-item-selected {
+    background-color: #1890ff !important;
+}
+
+.ant-menu-dark .ant-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 按钮样式 */
+.ant-btn-primary {
+    border-radius: 6px;
+}
+
+.ant-btn-default {
+    border-radius: 6px;
+}
+
+/* 输入框样式 */
+.ant-input {
+    border-radius: 6px;
+}
+
+.ant-select-selector {
+    border-radius: 6px !important;
+}
+
+/* 模态框样式 */
+.ant-modal {
+    border-radius: 8px;
+}
+
+.ant-modal-header {
+    border-radius: 8px 8px 0 0;
+}
+
+/* 网络图样式 */
+.network-graph {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+.network-node {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.network-node:hover {
+    transform: scale(1.1);
+}
+
+.network-edge {
+    stroke: #d9d9d9;
+    stroke-width: 2;
+}
+
+.network-edge.strong {
+    stroke: #1890ff;
+    stroke-width: 3;
+}
+
+.network-label {
+    font-size: 12px;
+    fill: #333;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+/* 响应式样式 */
+@media (max-width: 768px) {
+    .ant-layout-sider {
+        position: fixed !important;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 1000;
+    }
+
+    .ant-layout-content {
+        margin-left: 0 !important;
+        padding: 16px;
+    }
+
+    .ant-statistic-content {
+        font-size: 20px;
+    }
+}
+
+/* 打印样式 */
+@media print {
+
+    .ant-layout-sider,
+    .ant-layout-header {
+        display: none !important;
+    }
+
+    .ant-layout-content {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+}
