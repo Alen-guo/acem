@@ -233,3 +233,42 @@ export interface BillStats {
 // 账单枚举类型
 export type BillType = '收入' | '支出';
 export type BillStatus = '已支付' | '待支付' | '已逾期' | '已取消'; 
+
+// 具体的API响应类型
+export interface CustomerStatsResponse {
+  totalCustomers: number;
+  newCustomersThisMonth: number;
+  highIntentionCustomers: number;
+  totalExpectedValue: number;
+  statusDistribution: { status: CooperationStatus; count: number }[];
+  priorityDistribution: { priority: Priority; count: number }[];
+}
+
+export interface SalesStatsResponse {
+  totalSales: number;
+  monthlyGrowth: number;
+  topSalespeople: { name: string; sales: number; customerCount: number }[];
+  monthlyTrend: { month: string; sales: number; customers: number }[];
+}
+
+export interface CustomerAnalysisResponse {
+  industryDistribution: { industry: string; count: number }[];
+  regionDistribution: { region: string; count: number }[];
+  cooperationTrend: { month: string; newCustomers: number; signedDeals: number }[];
+  customerRetention: { month: string; retentionRate: number }[];
+}
+
+// Excel导入相关类型
+export interface ExcelImportResponse {
+  success: boolean;
+  importedCount: number;
+  errors: string[];
+  data: any[];
+}
+
+export interface SheetData {
+  sheetName: string;
+  headers: string[];
+  data: Record<string, any>[];
+  rowCount: number;
+} 

@@ -122,9 +122,24 @@ const MainLayout: React.FC = () => {
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* 侧边栏 */}
-      <Sider trigger={null} collapsible collapsed={collapsed} theme="dark">
+    <div style={{ height: '100vh', overflow: 'hidden' }}>
+      {/* 固定侧边栏 */}
+      <Sider
+        trigger={null}
+        collapsible
+        collapsed={collapsed}
+        theme="dark"
+        width={200}
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
+          height: '100vh',
+          transition: 'width 0.2s',
+        }}
+      >
         <div
           style={{
             height: '64px',
@@ -148,17 +163,31 @@ const MainLayout: React.FC = () => {
         />
       </Sider>
 
-      {/* 主体内容 */}
-      <Layout>
-        {/* 顶部导航栏 */}
+      {/* 主体内容区（包含固定Header和可滚动Content） */}
+      <div
+        style={{
+          marginLeft: collapsed ? 80 : 200,
+          height: '100vh',
+          transition: 'margin-left 0.2s',
+          background: '#f5f6fa',
+        }}
+      >
+        {/* 固定Header */}
         <Header
           style={{
+            position: 'fixed',
+            left: collapsed ? 80 : 200,
+            right: 0,
+            top: 0,
+            height: 64,
+            zIndex: 101,
             padding: '0 16px',
             background: '#fff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            transition: 'left 0.2s',
           }}
         >
           <Button
@@ -185,20 +214,22 @@ const MainLayout: React.FC = () => {
           </Space>
         </Header>
 
-        {/* 主内容区域 */}
-        <Content
+        {/* 可滚动主内容区 */}
+        <div
           style={{
-            margin: '24px 16px',
+            marginTop: 80,
             padding: 24,
-            minHeight: '100%',
+            minHeight: 'calc(100vh - 80px)',
+            height: 'calc(100vh - 80px)',
+            overflowY: 'auto',
             background: '#fff',
             borderRadius: '8px',
           }}
         >
           <Outlet />
-        </Content>
-      </Layout>
-    </Layout>
+        </div>
+      </div>
+    </div>
   );
 };
 

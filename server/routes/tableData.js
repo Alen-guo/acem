@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const TableData = require('../models/TableData');
-const mongoose = require('mongoose');
+const { Op } = require('sequelize');
 
 // 批量导入表格数据
 router.post('/import', async (req, res) => {
@@ -27,8 +27,19 @@ router.post('/import', async (req, res) => {
       });
     }
 
-    const userId = req.user?.id || new mongoose.Types.ObjectId('507f1f77bcf86cd799439011'); // 临时用户ID
+    const userId = req.user?.id || 1; // 临时用户ID
     const importedSheets = [];
+
+    // 🔄 替换逻辑：删除该月份的现有数据
+    console.log(`🗑️ 正在删除 ${targetYear}年${targetMonth}月 的现有数据...`);
+    const deletedCount = await TableData.destroy({
+      where: {
+        targetYear: parseInt(targetYear),
+        targetMonth: parseInt(targetMonth),
+        createdBy: userId
+      }
+    });
+    console.log(`🗑️ 已删除 ${deletedCount} 条旧数据`);
 
     // 处理每个工作表
     for (const sheet of sheets) {
@@ -37,16 +48,16 @@ router.post('/import', async (req, res) => {
         const data = sheet.editingData || sheet.data || [];
         const limitedData = data.slice(0, 1000); // 限制每个工作表最多1000行
         
-        const tableData = new TableData({
+        const tableDataObj = {
           fileName: fileName || '未知文件',
           sheetName: sheet.name,
-          uploadDate: new Date(),
-          targetMonth: `${targetYear}-${String(targetMonth).padStart(2, '0')}`,
           targetYear: parseInt(targetYear),
-          columns: sheet.columns || [],
-          originalData: limitedData,
+          targetMonth: parseInt(targetMonth),
+          headers: sheet.columns || [],
+          data: limitedData,
           totalRows: limitedData.length,
-          totalColumns: (sheet.columns || []).length,
+          validRows: limitedData.length,
+          status: 'completed',
           metadata: {
             hasChanges: sheet.hasChanges || false,
             originalStructure: {
@@ -61,11 +72,11 @@ router.post('/import', async (req, res) => {
             }
           },
           createdBy: userId,
-          status: 'active'
-        });
+          notes: `导入自文件: ${fileName}`
+        };
 
         console.log(`正在保存工作表: ${sheet.name}, 数据行数: ${limitedData.length}`);
-        const saved = await tableData.save({ timeout: 30000 }); // 增加超时时间到30秒
+        const saved = await TableData.create(tableDataObj);
         console.log(`工作表 ${sheet.name} 保存成功`);
         importedSheets.push(saved);
       } catch (error) {
@@ -81,7 +92,15 @@ router.post('/import', async (req, res) => {
         importedCount: importedSheets.length,
         totalSheets: sheets.length,
         targetMonth: `${targetYear}-${String(targetMonth).padStart(2, '0')}`,
-        sheets: importedSheets.map(sheet => sheet.getSummary())
+        sheets: importedSheets.map(sheet => ({
+          id: sheet.id,
+          fileName: sheet.fileName,
+          sheetName: sheet.sheetName,
+          totalRows: sheet.totalRows,
+          targetMonth: sheet.targetMonth,
+          targetYear: sheet.targetYear,
+          status: sheet.status
+        }))
       }
     });
   } catch (error) {
@@ -103,21 +122,25 @@ router.get('/monthly', async (req, res) => {
     
     if (month && year) {
       // 按指定月份查询
-      const targetMonth = `${year}-${String(month).padStart(2, '0')}`;
-      tableDataList = await TableData.find({
-        targetYear: parseInt(year),
-        targetMonth: targetMonth,
-        status: 'active'
-      }).populate('createdBy', 'username email').sort({ uploadDate: -1 });
+      tableDataList = await TableData.findAll({
+        where: {
+          targetYear: parseInt(year),
+          targetMonth: parseInt(month),
+          status: 'completed'
+        },
+        order: [['createdAt', 'DESC']]
+      });
     } else if (startDate && endDate) {
       // 按日期范围查询
-      tableDataList = await TableData.find({
-        uploadDate: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
+      tableDataList = await TableData.findAll({
+        where: {
+          createdAt: {
+            [Op.between]: [new Date(startDate), new Date(endDate)]
+          },
+          status: 'completed'
         },
-        status: 'active'
-      }).populate('createdBy', 'username email').sort({ uploadDate: -1 });
+        order: [['createdAt', 'DESC']]
+      });
     } else {
       return res.status(400).json({
         status: 'error',
@@ -134,13 +157,13 @@ router.get('/monthly', async (req, res) => {
         sheetGroups[sheetName] = {
           name: sheetName,
           data: [],
-          columns: tableData.columns,
+          headers: tableData.headers,
           uploads: [],
           totalRows: 0,
           totalIncome: 0, // 前端期望的字段
           totalExpense: 0, // 前端期望的字段
           count: 0, // 前端期望的字段
-          structure: tableData.columns, // 前端期望的字段
+          structure: tableData.headers, // 前端期望的字段
           metadata: {
             latestUpload: null,
             totalUploads: 0
@@ -149,21 +172,23 @@ router.get('/monthly', async (req, res) => {
       }
       
       // 合并数据（如果同一个工作表有多次上传）
-      sheetGroups[sheetName].data.push(...tableData.originalData);
+      if (Array.isArray(tableData.data)) {
+        sheetGroups[sheetName].data.push(...tableData.data);
+      }
       sheetGroups[sheetName].totalRows += tableData.totalRows;
       sheetGroups[sheetName].count += tableData.totalRows;
       sheetGroups[sheetName].uploads.push({
-        id: tableData._id,
+        id: tableData.id,
         fileName: tableData.fileName,
-        uploadDate: tableData.uploadDate,
+        uploadDate: tableData.createdAt,
         rowCount: tableData.totalRows
       });
       sheetGroups[sheetName].metadata.totalUploads++;
       
       // 更新最新上传时间
       if (!sheetGroups[sheetName].metadata.latestUpload || 
-          tableData.uploadDate > sheetGroups[sheetName].metadata.latestUpload) {
-        sheetGroups[sheetName].metadata.latestUpload = tableData.uploadDate;
+          tableData.createdAt > sheetGroups[sheetName].metadata.latestUpload) {
+        sheetGroups[sheetName].metadata.latestUpload = tableData.createdAt;
       }
     });
 
@@ -206,34 +231,44 @@ router.get('/list', async (req, res) => {
   try {
     const { page = 1, limit = 20, month, year, sheetName } = req.query;
     
-    const filter = { status: 'active' };
+    const where = { status: 'completed' };
     if (month && year) {
-      filter.targetMonth = `${year}-${String(month).padStart(2, '0')}`;
+      where.targetMonth = parseInt(month);
+      where.targetYear = parseInt(year);
     }
     if (sheetName) {
-      filter.sheetName = new RegExp(sheetName, 'i');
+      where.sheetName = { [Op.like]: `%${sheetName}%` };
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (parseInt(page) - 1) * parseInt(limit);
     
-    const tableDataList = await TableData.find(filter)
-      .populate('createdBy', 'username email')
-      .sort({ uploadDate: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-    
-    const total = await TableData.countDocuments(filter);
+    const { count, rows: tableDataList } = await TableData.findAndCountAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      offset,
+      limit: parseInt(limit)
+    });
 
     res.json({
       status: 'success',
       message: '获取表格列表成功',
       data: {
-        list: tableDataList.map(item => item.getSummary()),
+        list: tableDataList.map(item => ({
+          id: item.id,
+          fileName: item.fileName,
+          sheetName: item.sheetName,
+          targetMonth: item.targetMonth,
+          targetYear: item.targetYear,
+          totalRows: item.totalRows,
+          validRows: item.validRows,
+          status: item.status,
+          createdAt: item.createdAt
+        })),
         pagination: {
           current: parseInt(page),
           pageSize: parseInt(limit),
-          total: total,
-          pages: Math.ceil(total / parseInt(limit))
+          total: count,
+          pages: Math.ceil(count / parseInt(limit))
         }
       }
     });
@@ -252,7 +287,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const tableData = await TableData.findById(id);
+    const tableData = await TableData.findByPk(id);
     if (!tableData) {
       return res.status(404).json({
         status: 'error',
@@ -261,8 +296,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     // 软删除
-    tableData.status = 'deleted';
-    await tableData.save();
+    await tableData.update({ status: 'failed' });
 
     res.json({
       status: 'success',
@@ -283,8 +317,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const tableData = await TableData.findById(id)
-      .populate('createdBy', 'username email');
+    const tableData = await TableData.findByPk(id);
     
     if (!tableData) {
       return res.status(404).json({

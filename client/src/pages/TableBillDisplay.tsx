@@ -36,17 +36,68 @@ import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import * as XLSX from 'xlsx';
 
-import { tableDataAPI } from '../services/api';
+import { tableDataAPI, billAPI } from '../services/api';
 
 const { Title, Text } = Typography;
 const { MonthPicker, RangePicker } = DatePicker;
 const { TabPane } = Tabs;
 
+// 自定义样式
+const tableStyles = `
+  .compact-table {
+    width: 100% !important;
+  }
+  .compact-table .ant-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+  .compact-table .ant-table-thead > tr > th {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+    text-align: center !important;
+    word-wrap: break-word !important;
+    overflow: hidden !important;
+  }
+  .compact-table .ant-table-tbody > tr > td {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    word-wrap: break-word !important;
+    line-height: 1.4 !important;
+    overflow: hidden !important;
+  }
+  .compact-table .ant-table-cell {
+    border-right: 1px solid #f0f0f0 !important;
+  }
+  .compact-table .ant-table-summary > tr > td {
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+  }
+  .compact-table .ant-table-container {
+    width: 100% !important;
+  }
+  .compact-table .ant-table-content {
+    width: 100% !important;
+  }
+  .compact-table .ant-table-body {
+    width: 100% !important;
+  }
+`;
+
+// 注入样式（避免重复添加）
+if (typeof document !== 'undefined' && !document.getElementById('compact-table-styles')) {
+  const styleElement = document.createElement('style');
+  styleElement.id = 'compact-table-styles';
+  styleElement.textContent = tableStyles;
+  document.head.appendChild(styleElement);
+}
+
 // 工作表数据接口
 interface ExcelSheetData {
   name: string;
   data: any[];
-  columns: any[];
+  columns?: any[];  // 可选，向后兼容
+  headers?: any[];  // 可选，实际API返回的字段
   structure: any;
   totalIncome: number;
   totalExpense: number;
@@ -73,27 +124,54 @@ const TableBillDisplay: React.FC = () => {
   const [dateMode, setDateMode] = useState<'single' | 'range'>('single');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const monthParam = searchParams.get('month');
-    return monthParam || dayjs().format('YYYY-MM');
+    const initial = monthParam || dayjs().format('YYYY-MM');
+    console.log('🎯 初始化月份:', initial);
+    return initial;
   });
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [activeSheetTab, setActiveSheetTab] = useState<string>('all');
 
+  // 调试：监听状态变化
+  React.useEffect(() => {
+    console.log('📊 状态变化:', { dateMode, selectedMonth, dateRange });
+  }, [dateMode, selectedMonth, dateRange]);
+
+  // 构建稳定的查询键
+  const queryKey = React.useMemo(() => {
+    if (dateMode === 'single') {
+      return ['monthlyTableData', 'single', selectedMonth];
+    } else if (dateMode === 'range' && dateRange) {
+      return ['monthlyTableData', 'range', dateRange.map(d => d.format('YYYY-MM')).join('-')];
+    }
+    return ['monthlyTableData', 'none'];
+  }, [dateMode, selectedMonth, dateRange]);
+
   // 获取月份表格数据
-  const { data: monthlyData, isLoading } = useQuery(
-    ['monthlyTableData', dateMode, selectedMonth, dateRange?.map(d => d.format('YYYY-MM')).join('-')],
+  const { data: monthlyData, isLoading, refetch } = useQuery(
+    queryKey,
     async () => {
+      console.log('🔄 React Query 执行中...', { dateMode, selectedMonth, dateRange });
+      
       if (dateMode === 'single') {
         const [year, month] = selectedMonth.split('-');
-        return tableDataAPI.getMonthlyTableData({
+        const apiParams = {
           month: month,
           year: parseInt(year),
-        });
+        };
+        console.log('📤 API 调用参数 (tableDataAPI):', apiParams);
+        
+        return tableDataAPI.getMonthlyTableData(apiParams);
       } else if (dateMode === 'range' && dateRange) {
-        return tableDataAPI.getMonthlyTableData({
+        const apiParams = {
           startDate: dateRange[0].startOf('month').toISOString(),
           endDate: dateRange[1].endOf('month').toISOString(),
-        });
+        };
+        console.log('📤 API 调用参数 (tableDataAPI):', apiParams);
+        
+        return tableDataAPI.getMonthlyTableData(apiParams);
       }
+      
+      console.log('⚠️ 没有有效的查询参数');
       return {
         status: 'success' as const,
         message: '无查询参数',
@@ -107,15 +185,39 @@ const TableBillDisplay: React.FC = () => {
     },
     {
       enabled: (dateMode === 'single' && !!selectedMonth) || (dateMode === 'range' && !!dateRange),
+      refetchOnWindowFocus: false, // 防止窗口切换时重复请求
+      staleTime: 5 * 60 * 1000, // 5分钟内认为数据是新鲜的
     }
   );
 
-  const sheetsData: MonthlySheetResponse = monthlyData?.data || { 
-    sheets: [], 
-    totalSheets: 0, 
-    totalRecords: 0, 
-    summary: { totalIncome: 0, totalExpense: 0, totalCount: 0 }
-  };
+  // 安全地提取数据，确保sheets始终是数组
+  const sheetsData: MonthlySheetResponse = React.useMemo(() => {
+    const defaultData = { 
+      sheets: [], 
+      totalSheets: 0, 
+      totalRecords: 0, 
+      summary: { totalIncome: 0, totalExpense: 0, totalCount: 0 }
+    };
+    
+    if (!monthlyData?.data) {
+      console.log('⚠️ API数据为空:', monthlyData);
+      return defaultData;
+    }
+    
+    const apiData = monthlyData.data;
+    console.log('📊 API返回数据结构:', { 
+      hasSheets: !!apiData.sheets, 
+      sheetsLength: Array.isArray(apiData.sheets) ? apiData.sheets.length : 'not array',
+      totalSheets: apiData.totalSheets 
+    });
+    
+    return {
+      sheets: Array.isArray(apiData.sheets) ? apiData.sheets : [],
+      totalSheets: apiData.totalSheets || 0,
+      totalRecords: apiData.totalRecords || 0,
+      summary: apiData.summary || { totalIncome: 0, totalExpense: 0, totalCount: 0 }
+    };
+  }, [monthlyData]);
 
   // 获取当前显示的工作表数据
   const currentSheet = useMemo(() => {
@@ -129,6 +231,13 @@ const TableBillDisplay: React.FC = () => {
   const handleMonthChange = (date: dayjs.Dayjs | null) => {
     if (date) {
       const monthStr = date.format('YYYY-MM');
+      console.log('📅 月份切换:', { 
+        oldMonth: selectedMonth, 
+        newMonth: monthStr, 
+        dateMode,
+        queryKey: ['monthlyTableData', dateMode, monthStr, null]
+      });
+      
       setSelectedMonth(monthStr);
       setSearchParams({ month: monthStr });
     }
@@ -250,51 +359,87 @@ const TableBillDisplay: React.FC = () => {
     
     // 序号列（更窄）
     if (titleLower.includes('序号') || titleLower.includes('编号') || dataIndexLower.includes('index')) {
-      return 60;
+      return 50;
     }
     
     // 日期相关列（紧凑）
     if (titleLower.includes('日期') || titleLower.includes('时间') || dataIndexLower.includes('date') || dataIndexLower.includes('time')) {
-      return 100;
+      return 80;
     }
     
     // 金额相关列（紧凑）
-    if (titleLower.includes('金额') || titleLower.includes('价格') || titleLower.includes('费用') || 
+    if (titleLower.includes('金额') || titleLower.includes('价格') || titleLower.includes('费用') || titleLower.includes('单价') || titleLower.includes('合价') ||
         dataIndexLower.includes('amount') || dataIndexLower.includes('price') || dataIndexLower.includes('money')) {
+      return 80;
+    }
+    
+    // 数量、单位相关列（很窄）
+    if (titleLower.includes('数量') || titleLower.includes('单位') || titleLower.includes('记录数') ||
+        dataIndexLower.includes('quantity') || dataIndexLower.includes('unit') || dataIndexLower.includes('count')) {
+      return 60;
+    }
+    
+    // 名称相关列（适中）
+    if (titleLower.includes('名称') || titleLower.includes('姓名') || titleLower.includes('品牌') || 
+        dataIndexLower.includes('name') || dataIndexLower.includes('brand')) {
       return 100;
     }
     
-    // 名称相关列（稍微收窄）
-    if (titleLower.includes('名称') || titleLower.includes('姓名') || dataIndexLower.includes('name')) {
+    // 规格、型号相关列（适中）
+    if (titleLower.includes('规格') || titleLower.includes('型号') || titleLower.includes('规格') ||
+        dataIndexLower.includes('spec') || dataIndexLower.includes('model')) {
       return 120;
     }
     
     // 描述相关列（收窄但保持可读性）
     if (titleLower.includes('描述') || titleLower.includes('备注') || titleLower.includes('说明') || 
         dataIndexLower.includes('desc') || dataIndexLower.includes('remark') || dataIndexLower.includes('comment')) {
-      return 150;
+      return 120;
     }
     
-    // 其他列默认宽度（收窄）
-    return 120;
+    // 其他列默认宽度（更紧凑）
+    return 90;
   };
 
   // 构建表格列（添加操作列）
   const buildTableColumns = (originalColumns: any[]): ColumnsType<any> => {
+    // 安全检查：确保originalColumns是数组
+    if (!Array.isArray(originalColumns)) {
+      console.warn('⚠️ buildTableColumns: originalColumns不是数组:', originalColumns);
+      return [];
+    }
+    
     // 处理原始列，添加省略和Tooltip功能
     const columns: ColumnsType<any> = originalColumns.map((col, index) => {
       const title = col.title || col.dataIndex || `列${index + 1}`;
       const dataIndex = col.dataIndex || col.key || `col_${index}`;
+      const titleLower = (title || '').toLowerCase();
+      
+      // 根据列类型设置不同的宽度权重
+      let width;
+      if (titleLower.includes('序号') || titleLower.includes('编号')) {
+        width = '8%';  // 序号列较窄
+      } else if (titleLower.includes('数量') || titleLower.includes('单位')) {
+        width = '10%'; // 数量单位列
+      } else if (titleLower.includes('单价') || titleLower.includes('合价') || titleLower.includes('金额')) {
+        width = '12%'; // 金额列
+      } else if (titleLower.includes('名称')) {
+        width = '20%'; // 名称列较宽
+      } else if (titleLower.includes('规格') || titleLower.includes('品牌')) {
+        width = '25%'; // 规格品牌列最宽
+      } else {
+        width = '15%'; // 其他列默认宽度
+      }
       
       return {
         title: title,
         dataIndex: dataIndex,
         key: col.key || dataIndex,
-        width: col.width || getColumnWidth(title, dataIndex), // 智能计算宽度
+        width: width, // 使用百分比宽度
         ellipsis: {
           showTitle: false, // 禁用默认的title，使用自定义Tooltip
         },
-        render: (text: any) => renderEllipsisText(text, 15), // 超过15个字符省略，配合更窄列宽
+        render: (text: any) => renderEllipsisText(text, 25), // 进一步增加显示字符数
       };
     });
     
@@ -302,17 +447,25 @@ const TableBillDisplay: React.FC = () => {
     columns.push({
       title: '账单信息',
       key: 'billInfo',
-      width: 100, // 收窄账单信息列
+      width: '10%',  // 使用百分比宽度
       fixed: 'right', // 固定在右侧
       render: (_: any, record: any) => (
-        <Space direction="vertical" size={2}>
-          <Text style={{ color: record._billType === '收入' ? '#52c41a' : '#ff4d4f', fontSize: '12px' }}>
+        <div style={{ textAlign: 'center', lineHeight: '1.2' }}>
+          <div style={{ 
+            color: record._billType === '收入' ? '#52c41a' : '#ff4d4f', 
+            fontSize: '11px',
+            fontWeight: 'bold'
+          }}>
             {record._billType === '收入' ? '+' : '-'}¥{record._billAmount?.toLocaleString()}
-          </Text>
-          <Text type="secondary" style={{ fontSize: '11px' }}>
+          </div>
+          <div style={{ 
+            color: '#999', 
+            fontSize: '10px',
+            marginTop: '2px'
+          }}>
             {dayjs(record._billDate).format('MM-DD')}
-          </Text>
-        </Space>
+          </div>
+        </div>
       ),
     });
 
@@ -335,13 +488,13 @@ const TableBillDisplay: React.FC = () => {
         <TableOutlined /> 月份表格展示
       </Title>
 
-      <Alert
+      {/* <Alert
         message="Excel原始结构展示"
         description="这里按照Excel原始表格结构展示导入的数据，每个Tab对应一个工作表，保持原有的表头和数据格式。"
         type="info"
         showIcon
         style={{ marginBottom: 24 }}
-      />
+      /> */}
 
       {/* 日期选择和统计 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -527,7 +680,7 @@ const TableBillDisplay: React.FC = () => {
                             valueStyle={{ fontSize: 14 }}
                           />
                         </Col>
-                        <Col span={12}>
+                        {/* <Col span={12}>
                           <Statistic
                             title="结余"
                             value={sheet.totalIncome - sheet.totalExpense}
@@ -538,7 +691,7 @@ const TableBillDisplay: React.FC = () => {
                               color: (sheet.totalIncome - sheet.totalExpense) >= 0 ? '#3f8600' : '#cf1322' 
                             }}
                           />
-                        </Col>
+                        </Col> */}
                       </Row>
                     </Card>
                   </Col>
@@ -604,36 +757,49 @@ const TableBillDisplay: React.FC = () => {
                 </div>
 
                 {/* Excel原始结构表格 */}
-                <Table
-                  columns={buildTableColumns(sheet.columns)}
-                  dataSource={sheet.data.map((row, index) => ({ ...row, key: index }))}
-                  bordered
-                  loading={isLoading}
-                  scroll={{ x: 1000, y: 600 }} // 收窄后调整水平滚动宽度
-                  pagination={{
-                    total: sheet.data.length,
-                    pageSize: 50,
-                    showSizeChanger: true,
-                    showQuickJumper: true,
-                    showTotal: (total, range) => 
-                      `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
-                  }}
-                  size="small"
-                  summary={() => (
-                    <Table.Summary>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={sheet.columns.length}>
-                          <Text strong>{sheet.name} 合计</Text>
-                        </Table.Summary.Cell>
-                        <Table.Summary.Cell index={1}>
-                          <Text strong style={{ color: (sheet.totalIncome - sheet.totalExpense) >= 0 ? '#3f8600' : '#cf1322' }}>
-                            结余: ¥{(sheet.totalIncome - sheet.totalExpense).toLocaleString()}
-                          </Text>
-                        </Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
+                <div style={{ 
+                  width: '100%',         // 使用100%宽度
+                  overflow: 'auto',      // 允许滚动
+                  borderRadius: '6px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                }}>
+                  <Table
+                    className="compact-table"  // 添加紧凑样式
+                    columns={buildTableColumns(sheet.columns || sheet.headers || [])}
+                    dataSource={Array.isArray(sheet.data) ? sheet.data.map((row, index) => ({ ...row, key: index })) : []}
+                    bordered
+                    loading={isLoading}
+                    scroll={{ 
+                      x: '100%',         // 表格宽度100%，充满容器
+                      y: 450             // 适当降低高度
+                    }}
+                    pagination={{
+                      total: Array.isArray(sheet.data) ? sheet.data.length : 0,
+                      pageSize: 20,      // 减少每页显示条数
+                      showSizeChanger: true,
+                      showQuickJumper: true,
+                      showTotal: (total, range) => 
+                        `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
+                      pageSizeOptions: ['10', '20', '50', '100'],
+                    }}
+                    size="small"
+                    tableLayout="fixed"   // 固定布局，让列宽平均分配
+                    summary={() => (
+                      <Table.Summary>
+                        <Table.Summary.Row>
+                          <Table.Summary.Cell index={0} colSpan={Math.max((sheet.columns || sheet.headers || []).length - 1, 1)}>
+                            <Text strong>{sheet.name} 合计</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={1}>
+                            <Text strong style={{ color: (sheet.totalIncome - sheet.totalExpense) >= 0 ? '#3f8600' : '#cf1322' }}>
+                              结余: ¥{(sheet.totalIncome - sheet.totalExpense).toLocaleString()}
+                            </Text>
+                          </Table.Summary.Cell>
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    )}
+                  />
+                </div>
               </TabPane>
             ))}
           </Tabs>

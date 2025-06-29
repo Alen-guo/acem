@@ -1,9 +1,9 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { ApiResponse, Customer, ContactRecord, User, Bill, BillFormData, BillStats } from '../types';
+import { ApiResponse, Customer, ContactRecord, User, Bill, BillFormData, BillStats, DashboardStats, CustomerStatsResponse, SalesStatsResponse, CustomerAnalysisResponse, ExcelImportResponse } from '../types';
 
 // 创建 axios 实例
 const api: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api',
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ export const customerAPI = {
         api.delete(`/customers/${id}`).then((res) => res.data),
 
     // 获取客户统计数据
-    getCustomerStats: (): Promise<ApiResponse<any>> =>
+    getCustomerStats: (): Promise<ApiResponse<CustomerStatsResponse>> =>
         api.get('/customers/stats').then((res) => res.data),
 };
 
@@ -139,15 +139,15 @@ export const userAPI = {
  */
 export const reportAPI = {
     // 获取仪表板数据
-    getDashboardData: (): Promise<ApiResponse<any>> =>
+    getDashboardData: (): Promise<ApiResponse<DashboardStats>> =>
         api.get('/reports/dashboard').then((res) => res.data),
 
     // 获取销售统计
-    getSalesStats: (params?: { dateRange?: [string, string] }): Promise<ApiResponse<any>> =>
+    getSalesStats: (params?: { dateRange?: [string, string] }): Promise<ApiResponse<SalesStatsResponse>> =>
         api.get('/reports/sales', { params }).then((res) => res.data),
 
     // 获取客户分析
-    getCustomerAnalysis: (): Promise<ApiResponse<any>> =>
+    getCustomerAnalysis: (): Promise<ApiResponse<CustomerAnalysisResponse>> =>
         api.get('/reports/customers').then((res) => res.data),
 };
 
@@ -187,7 +187,7 @@ export const billAPI = {
         api.delete(`/bills/${id}`).then((res) => res.data),
 
     // 获取账单统计数据
-    getBillStats: (params?: { year?: number }): Promise<ApiResponse<BillStats>> =>
+    getBillStats: (params?: { year?: number; month?: string }): Promise<ApiResponse<BillStats>> =>
         api.get('/bills/stats/overview', { params }).then((res) => res.data),
 
     // 获取分类列表
@@ -196,13 +196,34 @@ export const billAPI = {
 
     // 批量导入账单
     batchImportBills: async (data: {
-        bills: any[],
+        bills: BillFormData[],
         month?: number,
         year?: number,
-        sheetsData?: any[]
-    }) => {
-        const response = await api.post('/bills/batch-import', data);
-        return response.data;
+        sheetsData?: ExcelImportResponse[]
+    }): Promise<ApiResponse<ExcelImportResponse>> => {
+        return api.post('/bills/batch-import', data).then((res) => res.data);
+    },
+
+    // 导出账单数据
+    exportBills: async (params?: {
+        type?: string;
+        month?: string;
+        year?: number;
+        format?: 'excel' | 'csv';
+    }): Promise<Blob> => {
+        return api.get('/bills/export', { 
+            params,
+            responseType: 'blob'
+        }).then((res) => res.data);
+    },
+
+    // 解析Excel文件
+    parseExcelFile: async (file: File): Promise<ApiResponse<ExcelImportResponse>> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post('/bills/parse-excel', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        }).then((res) => res.data);
     },
 
     // 获取月份表格数据 - 按Excel原始结构（旧的账单API，保留兼容性）

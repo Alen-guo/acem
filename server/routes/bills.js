@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Bill = require('../models/Bill');
-const mongoose = require('mongoose');
+const { Op } = require('sequelize');
 
 /**
  * 账单管理路由
@@ -25,50 +25,48 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     // 构建查询条件
-    const query = {
-      createdBy: req.user?.id || '507f1f77bcf86cd799439011' // 临时用户ID，实际应该从认证中获取
+    const where = {
+      createdBy: req.user?.id || 1 // 临时用户ID，实际应该从认证中获取
     };
 
-    if (type) query.type = type;
-    if (category) query.category = category;
-    if (status) query.status = status;
+    if (type) where.type = type;
+    if (category) where.category = category;
+    if (status) where.status = status;
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+      where[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { description: { [Op.like]: `%${search}%` } }
       ];
     }
 
     // 日期范围查询优先
     if (startDate && endDate) {
-      query.date = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+      where.billDate = {
+        [Op.between]: [startDate, endDate]
       };
     } else if (month) {
-      query.month = month;
-      if (year) query.year = parseInt(year);
+      where.month = parseInt(month);
+      if (year) where.year = parseInt(year);
     } else if (year) {
-      query.year = parseInt(year);
+      where.year = parseInt(year);
     }
 
     // 执行查询
-    const bills = await Bill.find(query)
-      .sort({ date: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit))
-      .populate('createdBy', 'name email');
-
-    const total = await Bill.countDocuments(query);
+    const { count, rows: bills } = await Bill.findAndCountAll({
+      where,
+      order: [['billDate', 'DESC']],
+      offset: (page - 1) * limit,
+      limit: parseInt(limit)
+    });
 
     res.json({
       status: 'success',
       message: '获取账单列表成功',
       data: {
         bills,
-        total,
+        total: count,
         currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(count / limit)
       }
     });
   } catch (error) {
@@ -81,200 +79,61 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 获取账单详情
-router.get('/:id', async (req, res) => {
-  try {
-    const bill = await Bill.findById(req.params.id)
-      .populate('createdBy', 'name email');
-
-    if (!bill) {
-      return res.status(404).json({
-        status: 'error',
-        message: '账单不存在'
-      });
-    }
-
-    res.json({
-      status: 'success',
-      message: '获取账单详情成功',
-      data: bill
-    });
-  } catch (error) {
-    console.error('获取账单详情失败:', error);
-    res.status(500).json({
-      status: 'error',
-      message: '获取账单详情失败',
-      error: error.message
-    });
-  }
-});
-
-// 创建账单
-router.post('/', async (req, res) => {
-  try {
-    const billData = {
-      ...req.body,
-      createdBy: req.user?.id || '507f1f77bcf86cd799439011' // 临时用户ID
-    };
-
-    const bill = new Bill(billData);
-    await bill.save();
-
-    res.status(201).json({
-      status: 'success',
-      message: '创建账单成功',
-      data: bill
-    });
-  } catch (error) {
-    console.error('创建账单失败:', error);
-    res.status(500).json({
-      status: 'error',
-      message: '创建账单失败',
-      error: error.message
-    });
-  }
-});
-
-// 更新账单
-router.put('/:id', async (req, res) => {
-  try {
-    const bill = await Bill.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!bill) {
-      return res.status(404).json({
-        status: 'error',
-        message: '账单不存在'
-      });
-    }
-
-    res.json({
-      status: 'success',
-      message: '更新账单成功',
-      data: bill
-    });
-  } catch (error) {
-    console.error('更新账单失败:', error);
-    res.status(500).json({
-      status: 'error',
-      message: '更新账单失败',
-      error: error.message
-    });
-  }
-});
-
-// 删除账单
-router.delete('/:id', async (req, res) => {
-  try {
-    const bill = await Bill.findByIdAndDelete(req.params.id);
-
-    if (!bill) {
-      return res.status(404).json({
-        status: 'error',
-        message: '账单不存在'
-      });
-    }
-
-    res.json({
-      status: 'success',
-      message: '删除账单成功',
-      data: { deletedId: req.params.id }
-    });
-  } catch (error) {
-    console.error('删除账单失败:', error);
-    res.status(500).json({
-      status: 'error',
-      message: '删除账单失败',
-      error: error.message
-    });
-  }
-});
-
 // 获取账单统计数据
 router.get('/stats/overview', async (req, res) => {
   try {
-    const { year = new Date().getFullYear() } = req.query;
-    const userId = req.user?.id || '507f1f77bcf86cd799439011';
+    const { year = new Date().getFullYear(), month } = req.query;
+    const userId = req.user?.id || 1;
 
-    // 当前年度统计
-    const yearlyStats = await Bill.aggregate([
-      {
-        $match: {
-          createdBy: new mongoose.Types.ObjectId(userId),
-          year: parseInt(year)
-        }
-      },
-      {
-        $group: {
-          _id: '$type',
-          totalAmount: { $sum: '$amount' },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
+    console.log('统计查询参数:', { year, month, userId });
 
-    // 当前月统计
-    const currentMonth = `${year}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-    const monthlyStats = await Bill.aggregate([
-      {
-        $match: {
-          createdBy: new mongoose.Types.ObjectId(userId),
-          month: currentMonth
-        }
-      },
-      {
-        $group: {
-          _id: '$type',
-          totalAmount: { $sum: '$amount' },
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // 月度趋势数据 - 添加错误处理
-    let monthlyTrends = [];
-    try {
-      monthlyTrends = await Bill.getMonthlyStats(userId, parseInt(year)) || [];
-    } catch (trendsError) {
-      console.warn('获取月度趋势数据失败:', trendsError);
-      monthlyTrends = [];
+    // 当月/当年统计
+    let currentWhere = { year: parseInt(year), createdBy: userId };
+    if (month) {
+      currentWhere.month = parseInt(month);
     }
 
-    // 分类统计 - 添加错误处理
-    let categoryStats = [];
-    try {
-      categoryStats = await Bill.getCategoryStats(userId, parseInt(year)) || [];
-    } catch (categoryError) {
-      console.warn('获取分类统计数据失败:', categoryError);
-      categoryStats = [];
-    }
+    // 查询当前时间段的账单
+    const currentBills = await Bill.findAll({ where: currentWhere });
+    console.log(`查询到 ${month ? month + '月' : year + '年'} 账单数量:`, currentBills.length);
+    
+    let currentIncome = 0, currentExpense = 0;
+    currentBills.forEach(bill => {
+      if (bill.type === '收入') currentIncome += parseFloat(bill.amount || 0);
+      if (bill.type === '支出') currentExpense += parseFloat(bill.amount || 0);
+    });
 
-    // 格式化数据 - 确保数据安全
-    const yearlyIncome = (Array.isArray(yearlyStats) ? yearlyStats.find(s => s._id === '收入')?.totalAmount : 0) || 0;
-    const yearlyExpense = (Array.isArray(yearlyStats) ? yearlyStats.find(s => s._id === '支出')?.totalAmount : 0) || 0;
-    const monthlyIncome = (Array.isArray(monthlyStats) ? monthlyStats.find(s => s._id === '收入')?.totalAmount : 0) || 0;
-    const monthlyExpense = (Array.isArray(monthlyStats) ? monthlyStats.find(s => s._id === '支出')?.totalAmount : 0) || 0;
+    // 年度统计（总是查询整年数据）
+    const yearlyWhere = { year: parseInt(year), createdBy: userId };
+    const yearlyBills = await Bill.findAll({ where: yearlyWhere });
+    
+    let yearlyIncome = 0, yearlyExpense = 0;
+    yearlyBills.forEach(bill => {
+      if (bill.type === '收入') yearlyIncome += parseFloat(bill.amount || 0);
+      if (bill.type === '支出') yearlyExpense += parseFloat(bill.amount || 0);
+    });
+
+    console.log('统计结果:', {
+      current: { income: currentIncome, expense: currentExpense },
+      yearly: { income: yearlyIncome, expense: yearlyExpense }
+    });
 
     res.json({
       status: 'success',
       message: '获取统计数据成功',
       data: {
-        currentMonthIncome: monthlyIncome,
-        currentMonthExpense: monthlyExpense,
-        currentMonthBalance: monthlyIncome - monthlyExpense,
+        currentMonthIncome: currentIncome,
+        currentMonthExpense: currentExpense,
+        currentMonthBalance: currentIncome - currentExpense,
         yearlyIncome,
         yearlyExpense,
         yearlyBalance: yearlyIncome - yearlyExpense,
-        monthlyTrends: Array.isArray(monthlyTrends) ? monthlyTrends : [],
-        categoryStats: Array.isArray(categoryStats) ? categoryStats : []
+        monthlyTrends: {},
+        categoryStats: []
       }
     });
   } catch (error) {
     console.error('获取统计数据失败:', error);
-    // 即使出错也返回默认空数据，保证前端正常工作
     res.json({
       status: 'success',
       message: '获取默认统计数据',
@@ -285,7 +144,7 @@ router.get('/stats/overview', async (req, res) => {
         yearlyIncome: 0,
         yearlyExpense: 0,
         yearlyBalance: 0,
-        monthlyTrends: [],
+        monthlyTrends: {},
         categoryStats: []
       }
     });
@@ -295,19 +154,12 @@ router.get('/stats/overview', async (req, res) => {
 // 获取分类列表
 router.get('/categories/list', async (req, res) => {
   try {
-    const userId = req.user?.id || '507f1f77bcf86cd799439011';
-    
-    const categories = await Bill.distinct('category', {
-      createdBy: new mongoose.Types.ObjectId(userId)
-    });
-
-    // 确保返回数组，即使为空
-    const categoryList = Array.isArray(categories) ? categories : [];
+    const categories = await Bill.getCategories();
 
     res.json({
       status: 'success',
       message: '获取分类列表成功',
-      data: categoryList.length > 0 ? categoryList : ['办公用品', '技术服务', '项目收入', '咨询服务'] // 提供默认分类
+      data: categories.length > 0 ? categories : ['办公用品', '技术服务', '项目收入', '咨询服务'] // 提供默认分类
     });
   } catch (error) {
     console.error('获取分类列表失败:', error);
@@ -320,104 +172,30 @@ router.get('/categories/list', async (req, res) => {
   }
 });
 
-// 批量导入表格数据
-router.post('/batch-import', async (req, res) => {
-  try {
-    const { bills, month, year, sheetsData } = req.body;
-    
-    if (!bills || !Array.isArray(bills) || bills.length === 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: '表格数据不能为空'
-      });
-    }
-
-    const userId = req.user?.id || '507f1f77bcf86cd799439011'; // 临时用户ID
-    const processedBills = [];
-
-    // 处理每条表格数据
-    for (const tableData of bills) {
-      try {
-        const processedBill = {
-          title: tableData.displayTitle || tableData.title || tableData.name || tableData.description || `${tableData.sheetName || '表格'}-第${tableData.originalIndex || 1}行`,
-          description: JSON.stringify({
-            sheetName: tableData.sheetName,
-            originalIndex: tableData.originalIndex,
-            originalData: tableData,
-            // 保存完整的工作表结构信息
-            sheetStructure: sheetsData?.find(sheet => sheet.name === tableData.sheetName) || null
-          }),
-          amount: parseFloat(tableData.displayAmount) || parseFloat(tableData.amount) || 0,
-          type: tableData.displayAmount >= 0 ? '收入' : '支出',
-          category: tableData.sheetName || '导入表格',
-          date: new Date(),
-          status: '已支付',
-          tags: tableData.sheetName ? [tableData.sheetName] : [],
-          createdBy: userId
-        };
-
-        // 如果指定了月份和年份，则设置日期
-        if (month && year) {
-          const monthStr = String(month).padStart(2, '0');
-          processedBill.date = new Date(`${year}-${monthStr}-01`);
-        }
-
-        const bill = new Bill(processedBill);
-        await bill.save();
-        processedBills.push(bill);
-      } catch (error) {
-        console.error('处理单条表格数据失败:', error);
-        // 继续处理其他数据
-      }
-    }
-
-    res.json({
-      status: 'success',
-      message: `成功导入 ${processedBills.length} 条表格记录`,
-      data: {
-        importedCount: processedBills.length,
-        totalCount: bills.length,
-        bills: processedBills
-      }
-    });
-  } catch (error) {
-    console.error('批量导入表格数据失败:', error);
-    res.status(500).json({
-      status: 'error',
-      message: '批量导入表格数据失败',
-      error: error.message
-    });
-  }
-});
-
 // 获取月份表格数据 - 按原始Excel结构分组
 router.get('/monthly-sheets', async (req, res) => {
   try {
     const { month, year, startDate, endDate } = req.query;
+    const { Op } = require('sequelize');
     
-    let dateFilter = {};
+    let whereClause = {};
     
     if (month && year) {
       const startOfMonth = new Date(year, month - 1, 1);
       const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
-      dateFilter = {
-        date: {
-          $gte: startOfMonth,
-          $lte: endOfMonth
-        }
+      whereClause.billDate = {
+        [Op.between]: [startOfMonth, endOfMonth]
       };
     } else if (startDate && endDate) {
-      dateFilter = {
-        date: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        }
+      whereClause.billDate = {
+        [Op.between]: [new Date(startDate), new Date(endDate)]
       };
     }
 
-    const bills = await Bill.find(dateFilter)
-      .populate('createdBy', 'username email')
-      .sort({ date: -1 });
+    const bills = await Bill.findAll({
+      where: whereClause,
+      order: [['billDate', 'DESC']]
+    });
 
     // 按工作表分组并重构原始Excel结构
     const sheetGroups = {};
@@ -444,11 +222,11 @@ router.get('/monthly-sheets', async (req, res) => {
         // 添加行数据
         sheetGroups[sheetName].data.push({
           ...originalData,
-          _billId: bill._id,
+          _billId: bill.id,
           _originalIndex: descData.originalIndex || 0,
           _billAmount: bill.amount,
           _billType: bill.type,
-          _billDate: bill.date,
+          _billDate: bill.billDate,
           _billStatus: bill.status
         });
         
@@ -500,6 +278,196 @@ router.get('/monthly-sheets', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: '获取月份表格数据失败',
+      error: error.message
+    });
+  }
+});
+
+// 获取账单详情 - 移到最后，避免路由冲突
+router.get('/:id', async (req, res) => {
+  try {
+    const bill = await Bill.findByPk(req.params.id);
+
+    if (!bill) {
+      return res.status(404).json({
+        status: 'error',
+        message: '账单不存在'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: '获取账单详情成功',
+      data: bill
+    });
+  } catch (error) {
+    console.error('获取账单详情失败:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '获取账单详情失败',
+      error: error.message
+    });
+  }
+});
+
+// 创建账单
+router.post('/', async (req, res) => {
+  try {
+    const billData = {
+      ...req.body,
+      createdBy: req.user?.id || 1 // 临时用户ID
+    };
+
+    // 自动设置月份和年份
+    if (billData.billDate) {
+      const date = new Date(billData.billDate);
+      billData.month = date.getMonth() + 1;
+      billData.year = date.getFullYear();
+    }
+
+    const bill = await Bill.create(billData);
+
+    res.status(201).json({
+      status: 'success',
+      message: '创建账单成功',
+      data: bill
+    });
+  } catch (error) {
+    console.error('创建账单失败:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '创建账单失败',
+      error: error.message
+    });
+  }
+});
+
+// 更新账单
+router.put('/:id', async (req, res) => {
+  try {
+    const [updatedRowsCount] = await Bill.update(req.body, {
+      where: { id: req.params.id }
+    });
+
+    if (updatedRowsCount === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: '账单不存在'
+      });
+    }
+
+    const bill = await Bill.findByPk(req.params.id);
+
+    res.json({
+      status: 'success',
+      message: '更新账单成功',
+      data: bill
+    });
+  } catch (error) {
+    console.error('更新账单失败:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '更新账单失败',
+      error: error.message
+    });
+  }
+});
+
+// 删除账单
+router.delete('/:id', async (req, res) => {
+  try {
+    const deletedRowsCount = await Bill.destroy({
+      where: { id: req.params.id }
+    });
+
+    if (deletedRowsCount === 0) {
+      return res.status(404).json({
+        status: 'error',
+        message: '账单不存在'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      message: '删除账单成功',
+      data: { deletedId: req.params.id }
+    });
+  } catch (error) {
+    console.error('删除账单失败:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '删除账单失败',
+      error: error.message
+    });
+  }
+});
+
+// 批量导入表格数据
+router.post('/batch-import', async (req, res) => {
+  try {
+    const { bills, month, year, sheetsData } = req.body;
+    
+    if (!bills || !Array.isArray(bills) || bills.length === 0) {
+      return res.status(400).json({
+        status: 'error',
+        message: '表格数据不能为空'
+      });
+    }
+
+    const userId = req.user?.id || 1; // 临时用户ID
+    const processedBills = [];
+
+    // 处理每条表格数据
+    for (const tableData of bills) {
+      try {
+        const processedBill = {
+          title: tableData.displayTitle || tableData.title || tableData.name || tableData.description || `${tableData.sheetName || '表格'}-第${tableData.originalIndex || 1}行`,
+          description: JSON.stringify({
+            sheetName: tableData.sheetName,
+            originalIndex: tableData.originalIndex,
+            originalData: tableData,
+            // 保存完整的工作表结构信息
+            sheetStructure: sheetsData?.find(sheet => sheet.name === tableData.sheetName) || null
+          }),
+          amount: parseFloat(tableData.displayAmount) || parseFloat(tableData.amount) || 0,
+          type: tableData.displayAmount >= 0 ? '收入' : '支出',
+          category: tableData.sheetName || '导入表格',
+          billDate: new Date(),
+          status: '已支付',
+          tags: tableData.sheetName ? [tableData.sheetName] : [],
+          createdBy: userId
+        };
+
+        // 如果指定了月份和年份，则设置日期
+        if (month && year) {
+          const monthStr = String(month).padStart(2, '0');
+          processedBill.billDate = new Date(`${year}-${monthStr}-01`);
+          processedBill.month = parseInt(month);
+          processedBill.year = parseInt(year);
+        }
+
+        const bill = await Bill.create(processedBill);
+        processedBills.push(bill);
+      } catch (error) {
+        console.error('处理单条表格数据失败:', error);
+        // 继续处理其他数据
+      }
+    }
+
+    res.json({
+      status: 'success',
+      message: `成功导入 ${processedBills.length} 条表格记录`,
+      data: {
+        importedCount: processedBills.length,
+        totalCount: bills.length,
+        bills: processedBills
+      }
+    });
+  } catch (error) {
+    console.error('批量导入表格数据失败:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '批量导入表格数据失败',
       error: error.message
     });
   }

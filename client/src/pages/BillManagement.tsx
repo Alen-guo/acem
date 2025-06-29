@@ -59,6 +59,7 @@ const BillManagement: React.FC = () => {
     page: 1,
     limit: 10,
     year: new Date().getFullYear(),
+    month: String(new Date().getMonth() + 1), // month类型为字符串
   });
 
   // 获取账单列表
@@ -70,10 +71,10 @@ const BillManagement: React.FC = () => {
     }
   );
 
-  // 获取统计数据
+  // 获取统计数据（传递year和month，month转为string）
   const { data: statsData } = useQuery(
-    ['billStats', searchParams.year],
-    () => billAPI.getBillStats({ year: searchParams.year })
+    ['billStats', searchParams.year, searchParams.month],
+    () => billAPI.getBillStats({ year: searchParams.year, month: searchParams.month?.toString() })
   );
 
   // 获取分类列表
@@ -237,16 +238,13 @@ const BillManagement: React.FC = () => {
 
     // 根据日期模式处理不同的日期参数
     if (dateMode === 'month') {
-      newParams.year = values.year;
-      newParams.month = values.month;
-      // 清除日期范围参数
+      newParams.year = Number(values.year);
+      newParams.month = String(Number(values.month)); // month传字符串
       delete newParams.startDate;
       delete newParams.endDate;
     } else if (dateMode === 'range' && values.dateRange) {
-      // 设置日期范围参数
       newParams.startDate = values.dateRange[0].startOf('day').toISOString();
       newParams.endDate = values.dateRange[1].endOf('day').toISOString();
-      // 清除月份参数
       delete newParams.year;
       delete newParams.month;
     }
@@ -260,6 +258,7 @@ const BillManagement: React.FC = () => {
       ...searchParams,
       page: pagination.current,
       limit: pagination.pageSize,
+      month: String(searchParams.month), // 保证month字段为字符串
     });
   };
 
@@ -283,11 +282,17 @@ const BillManagement: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await billForm.validateFields();
+      const dateObj = dayjs(values.date);
       const formData: BillFormData = {
         ...values,
-        date: values.date.toDate(),
+        billDate: dateObj.toDate(),
+        year: dateObj.year(),
+        month: dateObj.month() + 1,
       };
-
+      // 删除多余字段，避免类型报错
+      if ('date' in formData) {
+        delete (formData as any).date;
+      }
       if (editingBill) {
         updateBillMutation.mutate({ id: editingBill._id, data: formData });
       } else {
@@ -311,7 +316,7 @@ const BillManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="本月收入"
+              title={`${searchParams.month || (new Date().getMonth() + 1)}月收入`}
               value={stats?.currentMonthIncome || 0}
               precision={2}
               prefix="¥"
@@ -322,7 +327,7 @@ const BillManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="本月支出"
+              title={`${searchParams.month || (new Date().getMonth() + 1)}月支出`}
               value={stats?.currentMonthExpense || 0}
               precision={2}
               prefix="¥"
@@ -333,7 +338,7 @@ const BillManagement: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="本月结余"
+              title={`${searchParams.month || (new Date().getMonth() + 1)}月结余`}
               value={stats?.currentMonthBalance || 0}
               precision={2}
               prefix="¥"
@@ -379,7 +384,10 @@ const BillManagement: React.FC = () => {
           form={searchForm}
           layout="inline"
           onFinish={handleSearch}
-          initialValues={{ year: new Date().getFullYear() }}
+          initialValues={{
+            year: new Date().getFullYear(),
+            month: new Date().getMonth() + 1, // 默认本月
+          }}
         >
           <Form.Item name="search">
             <Input
@@ -416,14 +424,9 @@ const BillManagement: React.FC = () => {
               </Form.Item>
               <Form.Item name="month">
                 <Select placeholder="选择月份" style={{ width: 100 }} allowClear>
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const month = String(i + 1).padStart(2, '0');
-                    return (
-                      <Select.Option key={month} value={`${searchForm.getFieldValue('year') || new Date().getFullYear()}-${month}`}>
-                        {i + 1}月
-                      </Select.Option>
-                    );
-                  })}
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <Select.Option key={i + 1} value={i + 1}>{i + 1}月</Select.Option>
+                  ))}
                 </Select>
               </Form.Item>
             </>
@@ -445,7 +448,7 @@ const BillManagement: React.FC = () => {
               <Button onClick={() => {
                 searchForm.resetFields();
                 setDateMode('month');
-                setSearchParams({ page: 1, limit: 10, year: new Date().getFullYear() });
+                setSearchParams({ page: 1, limit: 10, year: new Date().getFullYear(), month: String(new Date().getMonth() + 1) });
               }}>
                 重置
               </Button>
@@ -499,7 +502,7 @@ const BillManagement: React.FC = () => {
           initialValues={{
             type: '支出',
             status: '已支付',
-            date: dayjs(),
+            date: dayjs(), // 默认当前时间
           }}
         >
           <Row gutter={16}>

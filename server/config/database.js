@@ -1,62 +1,44 @@
-const mongoose = require('mongoose');
-
 /**
- * 数据库配置和连接管理
+ * MySQL数据库配置 - 使用Sequelize ORM
  */
+const { Sequelize } = require('sequelize');
 
+// 数据库连接配置
+const sequelize = new Sequelize('acrm', 'root', '', {
+  host: 'localhost',
+  port: 3306,
+  dialect: 'mysql',
+  logging: console.log, // 开发环境显示SQL日志
+  pool: {
+    max: 10,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  },
+  define: {
+    timestamps: true, // 自动添加createdAt和updatedAt
+    underscored: false, // 使用camelCase而不是snake_case
+    freezeTableName: true // 不自动复数化表名
+  }
+});
+
+// 测试连接
 const connectDB = async () => {
   try {
-    // 本地开发环境
-    const localURI = 'mongodb://localhost:27017/acrm';
+    await sequelize.authenticate();
+    console.log('✅ MySQL 数据库连接成功');
     
-    // 云数据库环境 (生产环境使用)
-    const cloudURI = process.env.MONGODB_URI || localURI;
+    // 同步数据库表结构
+    await sequelize.sync({ alter: true }); // 开发环境使用alter，生产环境建议用migration
+    console.log('📊 数据库表结构同步完成');
     
-    console.log('🔄 正在连接数据库...');
-    
-    const conn = await mongoose.connect(cloudURI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    console.log(`✅ MongoDB 连接成功: ${conn.connection.host}`);
-    
-    // 监听连接事件
-    mongoose.connection.on('error', (err) => {
-      console.error('❌ MongoDB 连接错误:', err);
-    });
-
-    mongoose.connection.on('disconnected', () => {
-      console.log('🔌 MongoDB 连接断开');
-    });
-
-    // 应用关闭时断开数据库连接
-    process.on('SIGINT', async () => {
-      await mongoose.connection.close();
-      console.log('📴 应用关闭，数据库连接已断开');
-      process.exit(0);
-    });
-
   } catch (error) {
-    console.error('❌ 数据库连接失败:', error.message);
-    
-    // 如果是云数据库连接失败，尝试本地数据库
-    if (process.env.MONGODB_URI && error.message.includes('ENOTFOUND')) {
-      console.log('🔄 云数据库连接失败，尝试连接本地数据库...');
-      try {
-        await mongoose.connect('mongodb://localhost:27017/acrm', {
-          useNewUrlParser: true,
-          useUnifiedTopology: true,
-        });
-        console.log('✅ 本地 MongoDB 连接成功');
-      } catch (localError) {
-        console.error('❌ 本地数据库也连接失败:', localError.message);
-        process.exit(1);
-      }
-    } else {
-      process.exit(1);
-    }
+    console.error('❌ MySQL 连接失败:', error);
+    process.exit(1);
   }
 };
 
-module.exports = connectDB; 
+module.exports = {
+  sequelize,
+  connectDB
+}; 

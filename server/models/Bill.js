@@ -1,180 +1,199 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
 /**
  * 账单数据模型
  * 功能：定义账单的数据结构和验证规则
  */
-const billSchema = new mongoose.Schema({
+const Bill = sequelize.define('Bill', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   // 基本信息
-  title: { 
-    type: String, 
-    required: true, 
-    trim: true,
-    maxlength: 100
+  title: {
+    type: DataTypes.STRING(200),
+    allowNull: false,
+    comment: '账单标题'
   },
-  description: { 
-    type: String, 
-    trim: true,
-    maxlength: 500
+  amount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    comment: '金额'
   },
-  amount: { 
-    type: Number, 
-    required: true,
-    min: 0
-  },
-  
-  // 分类信息
   type: {
-    type: String,
-    enum: ['收入', '支出'],
-    required: true
+    type: DataTypes.ENUM('收入', '支出'),
+    allowNull: false,
+    comment: '账单类型'
   },
   category: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    comment: '分类'
+  },
+  description: {
+    type: DataTypes.TEXT,
+    comment: '描述'
   },
   
   // 时间信息
-  date: { 
-    type: Date, 
-    required: true 
+  billDate: {
+    type: DataTypes.DATEONLY,
+    allowNull: false,
+    comment: '账单日期'
   },
-  month: { 
-    type: String, 
-    required: true 
-  }, // 格式：YYYY-MM
-  year: { 
-    type: Number, 
-    required: true 
+  month: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    comment: '月份'
+  },
+  year: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    comment: '年份'
   },
   
-  // 状态和标签
+  // 状态信息
   status: {
-    type: String,
-    enum: ['已支付', '待支付', '已逾期', '已取消'],
-    default: '已支付'
+    type: DataTypes.ENUM('待处理', '已确认', '已支付', '已取消'),
+    defaultValue: '待处理',
+    comment: '状态'
   },
-  tags: [{
-    type: String,
-    trim: true
-  }],
-  
-  // 附件
-  attachments: [{
-    type: String
-  }],
-  
-  // 创建者
-  createdBy: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+  priority: {
+    type: DataTypes.ENUM('低', '中', '高'),
+    defaultValue: '中',
+    comment: '优先级'
   },
   
-  // 系统字段
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
+  // 关联信息
+  customerId: {
+    type: DataTypes.INTEGER,
+    comment: '关联客户ID'
   },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
-  }
-});
-
-// 索引优化
-billSchema.index({ createdBy: 1, month: -1 });
-billSchema.index({ createdBy: 1, year: -1, type: 1 });
-billSchema.index({ createdBy: 1, category: 1 });
-billSchema.index({ createdBy: 1, date: -1 });
-
-// 更新时间中间件
-billSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
+  projectName: {
+    type: DataTypes.STRING(200),
+    comment: '项目名称'
+  },
   
-  // 自动设置month和year字段
-  if (this.date) {
-    const date = new Date(this.date);
-    this.month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    this.year = date.getFullYear();
-  }
+  // 文件信息
+  attachments: {
+    type: DataTypes.JSON,
+    comment: '附件列表'
+  },
   
-  next();
-});
-
-// 验证前中间件 - 确保在验证前设置month和year
-billSchema.pre('validate', function(next) {
-  // 自动设置month和year字段
-  if (this.date && (!this.month || !this.year)) {
-    const date = new Date(this.date);
-    this.month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    this.year = date.getFullYear();
-  }
+  // 审核信息
+  isApproved: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    comment: '是否已审核'
+  },
+  approvedBy: {
+    type: DataTypes.INTEGER,
+    comment: '审核人ID'
+  },
+  approvedAt: {
+    type: DataTypes.DATE,
+    comment: '审核时间'
+  },
   
-  next();
-});
-
-// 静态方法：获取用户的月度统计
-billSchema.statics.getMonthlyStats = async function(userId, year) {
-  return this.aggregate([
+  // 创建信息
+  createdBy: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    comment: '创建人ID'
+  },
+  
+  // 标签和备注
+  tags: {
+    type: DataTypes.JSON,
+    comment: '标签列表'
+  },
+  notes: {
+    type: DataTypes.TEXT,
+    comment: '备注'
+  }
+}, {
+  tableName: 'bills',
+  timestamps: true,
+  indexes: [
     {
-      $match: {
-        createdBy: new mongoose.Types.ObjectId(userId),
-        year: year
-      }
+      fields: ['createdBy', 'billDate']
     },
     {
-      $group: {
-        _id: {
-          month: '$month',
-          type: '$type'
-        },
-        totalAmount: { $sum: '$amount' },
-        count: { $sum: 1 }
-      }
+      fields: ['type', 'category']
     },
     {
-      $group: {
-        _id: '$_id.month',
-        stats: {
-          $push: {
-            type: '$_id.type',
-            amount: '$totalAmount',
-            count: '$count'
-          }
-        }
-      }
+      fields: ['year', 'month']
     },
     {
-      $sort: { '_id': 1 }
+      fields: ['status']
     }
-  ]);
+  ],
+  comment: '账单表'
+});
+
+// 静态方法：获取分类列表
+Bill.getCategories = async function() {
+  try {
+    const result = await Bill.findAll({
+      attributes: [[sequelize.fn('DISTINCT', sequelize.col('category')), 'category']],
+      raw: true
+    });
+    return result.map(item => item.category).filter(Boolean);
+  } catch (error) {
+    console.error('获取分类列表失败:', error);
+    return [];
+  }
 };
 
-// 静态方法：获取分类统计
-billSchema.statics.getCategoryStats = async function(userId, year) {
-  return this.aggregate([
-    {
-      $match: {
-        createdBy: new mongoose.Types.ObjectId(userId),
+// 静态方法：获取统计数据
+Bill.getStats = async function(year = new Date().getFullYear()) {
+  try {
+    const stats = await Bill.findAll({
+      attributes: [
+        'type',
+        'month',
+        [sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+      ],
+      where: {
         year: year
+      },
+      group: ['type', 'month'],
+      raw: true
+    });
+
+    // 格式化统计数据
+    const monthlyStats = {};
+    const typeStats = { 收入: 0, 支出: 0 };
+    
+    stats.forEach(stat => {
+      const month = stat.month;
+      if (!monthlyStats[month]) {
+        monthlyStats[month] = { 收入: 0, 支出: 0 };
       }
-    },
-    {
-      $group: {
-        _id: {
-          category: '$category',
-          type: '$type'
-        },
-        totalAmount: { $sum: '$amount' },
-        count: { $sum: 1 }
-      }
-    },
-    {
-      $sort: { totalAmount: -1 }
-    }
-  ]);
+      monthlyStats[month][stat.type] = parseFloat(stat.totalAmount) || 0;
+      typeStats[stat.type] += parseFloat(stat.totalAmount) || 0;
+    });
+
+    return {
+      monthlyStats,
+      typeStats,
+      totalIncome: typeStats.收入,
+      totalExpense: typeStats.支出,
+      netIncome: typeStats.收入 - typeStats.支出
+    };
+  } catch (error) {
+    console.error('获取统计数据失败:', error);
+    return {
+      monthlyStats: {},
+      typeStats: { 收入: 0, 支出: 0 },
+      totalIncome: 0,
+      totalExpense: 0,
+      netIncome: 0
+    };
+  }
 };
 
-module.exports = mongoose.model('Bill', billSchema); 
+module.exports = Bill; 

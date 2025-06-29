@@ -1,5 +1,4 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
@@ -22,36 +21,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// 数据库连接
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://alenguo7578:0WPYi4Ct3M4I1zX2@cluster0.unsthar.mongodb.net/acrm?retryWrites=true&w=majority';
+// MySQL数据库连接
+const { connectDB } = require('./config/database');
 
-// 设置Mongoose缓冲选项
-mongoose.set('bufferCommands', false);
+// 连接数据库
+connectDB();
 
-mongoose.connect(MONGODB_URI, {
-  maxPoolSize: 10,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-  connectTimeoutMS: 10000,
-  family: 4
-})
-.then(() => console.log('✅ MongoDB Atlas 云数据库连接成功'))
-.catch(err => {
-  console.error('❌ MongoDB 连接失败:', err);
-  // 如果云数据库连接失败，尝试本地数据库
-  console.log('🔄 尝试连接本地数据库...');
-  mongoose.connect('mongodb://localhost:27017/acrm', {
-    maxPoolSize: 10,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 10000,
-    family: 4
-  })
-    .then(() => console.log('✅ 本地 MongoDB 连接成功'))
-    .catch(localErr => console.error('❌ 本地数据库也连接失败:', localErr));
-});
-
-// 路由配置
+// 路由配置 - 暂时不使用认证中间件，方便开发调试
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/customers', require('./routes/customers'));
 app.use('/api/contacts', require('./routes/contacts'));
@@ -64,7 +40,8 @@ app.use('/api/table-data', require('./routes/tableData'));
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'success',
-    message: 'ACRM API 服务正常运行',
+    message: 'ACRM API 服务正常运行 - MySQL版本',
+    database: 'MySQL',
     timestamp: new Date().toISOString()
   });
 });
@@ -87,9 +64,10 @@ app.use('*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
   console.log(`🚀 ACRM 服务器启动成功，端口: ${PORT}`);
   console.log(`📊 API 文档: http://localhost:${PORT}/api/health`);
+  console.log(`🗄️  数据库: MySQL`);
 }); 
