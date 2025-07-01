@@ -22,10 +22,10 @@ app.use(cors({
 }));
 
 // MySQL数据库连接
-const { connectDB } = require('./config/database');
+const { testConnection } = require('./config/database');
 
 // 连接数据库
-connectDB();
+testConnection();
 
 // 路由配置 - 暂时不使用认证中间件，方便开发调试
 app.use('/api/auth', require('./routes/auth'));
