@@ -39,7 +39,7 @@ function App() {
   
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
         <ConfigProvider
           locale={zhCN}
           theme={{
@@ -50,7 +50,7 @@ function App() {
             },
           }}
         >
-          <Router>
+        <Router>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Layout />}>
@@ -61,7 +61,7 @@ function App() {
                 <Route path="contacts" element={<ContactRecords />} />
                 <Route path="profile" element={<Profile />} />
                 <Route path="bills" element={<BillManagement />} />
-                <Route path="reports" element={<Reports />} />  
+                <Route path="reports" element={<Reports />} />
                 <Route path="person-map" element={<PersonMap />} />
                 <Route path="excel-analysis" element={<ExcelAnalysisNew />} />
                 <Route path="insurance-match" element={<InsuranceMatch />} />
@@ -69,9 +69,9 @@ function App() {
                 <Route path="*" element={<div style={{padding: '20px'}}>页面不存在，请检查路由配置</div>} />
               </Route>
             </Routes>
-          </Router>
-        </ConfigProvider>
-      </QueryClientProvider>
+        </Router>
+      </ConfigProvider>
+    </QueryClientProvider>
     </ErrorBoundary>
   );
 }

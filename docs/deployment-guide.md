@@ -419,3 +419,279 @@ sudo swapon /swapfile
 ---
 
 *祝您部署顺利！🎉* 
+
+## 📋 部署概览
+
+本指南将帮助你将ACRM系统部署到生产环境：
+- **前端**: Vercel
+- **后端**: Railway
+- **数据库**: PlanetScale (MySQL)
+- **文件存储**: Cloudinary (可选)
+
+## 🗄️ 第一步：准备云数据库
+
+### 推荐方案：PlanetScale (免费版支持1GB)
+
+1. **注册PlanetScale账号**
+   - 访问 https://planetscale.com
+   - 注册账号并验证邮箱
+
+2. **创建数据库**
+   ```bash
+   # 数据库名称：acrm-prod
+   # 区域：选择离用户最近的区域
+   ```
+
+3. **获取连接信息**
+   - 点击"Connect" -> "Create password"
+   - 复制连接字符串，格式类似：
+   ```
+   mysql://username:password@host.us-east-2.psdb.cloud/acrm-prod?sslaccept=strict
+   ```
+
+### 备选方案：Railway MySQL
+
+1. 在Railway控制台添加MySQL服务
+2. 获取数据库连接信息
+
+## 🖥️ 第二步：配置后端环境变量
+
+### 创建环境变战配置
+
+在server目录创建 `.env` 文件：
+
+```bash
+# ACRM后端环境变量配置
+
+# 服务器配置
+NODE_ENV=production
+PORT=3001
+
+# 数据库配置 (PlanetScale MySQL)
+DATABASE_URL=mysql://username:password@host.us-east-2.psdb.cloud/acrm-prod?sslaccept=strict
+
+# 或者分别配置 (如果使用Railway MySQL)
+DB_HOST=containers-us-west-xxx.railway.app
+DB_PORT=3306
+DB_NAME=railway
+DB_USER=root
+DB_PASSWORD=your_password
+
+# JWT配置
+JWT_SECRET=your-super-secret-jwt-key-min-32-characters
+JWT_EXPIRES_IN=7d
+
+# CORS配置
+FRONTEND_URL=https://your-app.vercel.app
+
+# 邮件配置 (可选)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+## 🛠️ 第三步：修改数据库配置文件
+
+✅ 已完成！数据库配置文件已自动支持生产环境。
+
+## 🚂 第四步：部署后端到Railway
+
+### 4.1 准备Railway账号
+1. 访问 https://railway.app
+2. 使用GitHub账号登录
+3. 连接你的GitHub仓库
+
+### 4.2 创建Railway项目
+1. 点击 "New Project"
+2. 选择 "Deploy from GitHub repo"
+3. 选择你的ACRM仓库
+4. 设置根目录为 `server`
+
+### 4.3 配置环境变量
+在Railway控制台的Variables标签页添加：
+
+```bash
+NODE_ENV=production
+PORT=3001
+DATABASE_URL=你的数据库连接字符串
+JWT_SECRET=生成一个32位以上的随机字符串
+JWT_EXPIRES_IN=7d
+FRONTEND_URL=https://你的前端域名.vercel.app
+```
+
+### 4.4 配置构建设置
+在Railway项目设置中：
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+- **Root Directory**: `server`
+
+## 🌐 第五步：部署前端到Vercel
+
+### 5.1 准备Vercel账号
+1. 访问 https://vercel.com
+2. 使用GitHub账号登录
+
+### 5.2 创建Vercel项目
+1. 点击 "New Project"
+2. 选择你的ACRM仓库
+3. 设置框架预设为 "Vite"
+4. 设置根目录为 `client`
+
+### 5.3 配置环境变量
+在Vercel项目设置的Environment Variables中添加：
+
+```bash
+VITE_API_BASE_URL=https://你的railway后端域名.railway.app/api
+```
+
+### 5.4 配置构建设置
+```bash
+Build Command: npm run build
+Output Directory: dist
+Install Command: npm install
+Root Directory: client
+```
+
+## ⚙️ 第六步：配置CORS和域名
+
+### 6.1 更新后端CORS配置
+
+✅ CORS配置已经支持生产环境！会自动使用FRONTEND_URL环境变量。
+
+### 6.2 添加生产环境安全中间件
+
+安装安全中间件：
+
+```bash
+cd server
+npm install helmet compression morgan
+```
+
+## 🔒 第七步：恢复认证系统
+
+### 7.1 取消认证中间件的注释
+
+在生产环境部署前，需要恢复用户认证：
+
+1. 在 `server/routes/customers.js` 等路由文件中恢复认证中间件
+2. 在前端恢复 `ProtectedRoute` 组件
+
+### 7.2 生成JWT密钥
+
+```bash
+# 生成32位随机密钥
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+## 🚀 第八步：部署流程总结
+
+### 8.1 部署检查清单
+
+- [ ] 云数据库已创建并获取连接字符串
+- [ ] Railway后端项目已创建并配置环境变量
+- [ ] Vercel前端项目已创建并配置环境变量
+- [ ] CORS配置正确（FRONTEND_URL指向Vercel域名）
+- [ ] JWT密钥已生成并配置
+- [ ] 认证系统已恢复（可选，稍后恢复）
+
+### 8.2 部署顺序
+
+1. **先部署数据库** → 获取连接字符串
+2. **部署后端** → 获取API域名
+3. **部署前端** → 配置API域名
+4. **测试连接** → 检查前后端通信
+
+## 🔍 第九步：健康检查和测试
+
+### 9.1 后端健康检查
+
+访问你的Railway域名：
+```
+https://你的项目名.railway.app/api/health
+```
+
+应该返回：
+```json
+{
+  "status": "success",
+  "message": "ACRM API 服务正常运行 - MySQL版本",
+  "database": "MySQL",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### 9.2 前端访问测试
+
+访问你的Vercel域名，应该能正常打开应用。
+
+### 9.3 数据库连接测试
+
+在Railway控制台查看Logs，应该看到：
+```
+✅ MySQL 数据库连接成功 (生产环境)
+📊 生产环境数据库表结构同步完成
+```
+
+## 🛠️ 故障排除
+
+### 常见问题
+
+1. **数据库连接失败**
+   - 检查DATABASE_URL是否正确
+   - 确认数据库服务是否运行
+   - 检查网络连接和防火墙
+
+2. **CORS错误**
+   - 确认FRONTEND_URL环境变量正确
+   - 检查域名格式（包含协议 https://）
+
+3. **API调用失败**
+   - 检查VITE_API_BASE_URL是否正确
+   - 确认后端服务正常运行
+
+4. **环境变量不生效**
+   - 重新部署服务
+   - 检查变量名拼写
+   - 确认变量值没有多余空格
+
+### 调试命令
+
+```bash
+# 查看Railway部署日志
+railway logs
+
+# 查看Vercel部署日志
+vercel logs
+
+# 本地测试生产环境配置
+NODE_ENV=production npm start
+```
+
+## 📊 监控和维护
+
+### 性能监控
+
+1. **Railway**: 内置监控面板
+2. **Vercel**: Analytics 功能
+3. **数据库**: PlanetScale内置监控
+
+### 日志管理
+
+- Railway自动收集应用日志
+- 生产环境错误会显示在控制台
+- 考虑集成第三方日志服务（如LogRocket）
+
+## 🎯 部署完成后的下一步
+
+1. **配置自定义域名**（可选）
+2. **设置SSL证书**（Vercel和Railway自动配置）
+3. **配置备份策略**
+4. **设置监控告警**
+5. **准备维护计划**
+
+---
+
+**🎉 恭喜！你的ACRM系统已成功部署到生产环境！**
+
+如果遇到任何问题，请检查各平台的文档或寻求技术支持。 

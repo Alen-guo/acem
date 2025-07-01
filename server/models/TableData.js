@@ -149,7 +149,7 @@ TableData.getStats = async function(year) {
         [sequelize.fn('SUM', sequelize.col('validRows')), 'validRows']
       ],
       where: {
-        targetYear: year,
+    targetYear: year,
         status: 'completed'
       },
       group: ['targetMonth', 'sheetName'],

@@ -12,12 +12,12 @@ const Bill = sequelize.define('Bill', {
     autoIncrement: true
   },
   // 基本信息
-  title: {
+  title: { 
     type: DataTypes.STRING(200),
     allowNull: false,
     comment: '账单标题'
   },
-  amount: {
+  amount: { 
     type: DataTypes.DECIMAL(15, 2),
     allowNull: false,
     comment: '金额'
@@ -43,12 +43,12 @@ const Bill = sequelize.define('Bill', {
     allowNull: false,
     comment: '账单日期'
   },
-  month: {
+  month: { 
     type: DataTypes.INTEGER,
     allowNull: false,
     comment: '月份'
   },
-  year: {
+  year: { 
     type: DataTypes.INTEGER,
     allowNull: false,
     comment: '年份'

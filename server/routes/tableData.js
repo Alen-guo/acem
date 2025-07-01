@@ -124,7 +124,7 @@ router.get('/monthly', async (req, res) => {
       // 按指定月份查询
       tableDataList = await TableData.findAll({
         where: {
-          targetYear: parseInt(year),
+        targetYear: parseInt(year),
           targetMonth: parseInt(month),
           status: 'completed'
         },
@@ -136,7 +136,7 @@ router.get('/monthly', async (req, res) => {
         where: {
           createdAt: {
             [Op.between]: [new Date(startDate), new Date(endDate)]
-          },
+        },
           status: 'completed'
         },
         order: [['createdAt', 'DESC']]
