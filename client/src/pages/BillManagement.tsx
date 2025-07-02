@@ -469,7 +469,7 @@ const BillManagement: React.FC = () => {
         <Table
           columns={columns}
           dataSource={billsData?.data?.bills || []}
-          rowKey="_id"
+          rowKey="id"
           loading={billsLoading}
           pagination={{
             current: billsData?.data?.currentPage || 1,

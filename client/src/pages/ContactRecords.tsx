@@ -306,7 +306,7 @@ const ContactRecords: React.FC = () => {
         <Table
           columns={columns}
           dataSource={filteredContacts}
-          rowKey="_id"
+          rowKey="id"
           pagination={{
             total: filteredContacts.length,
             pageSize: 10,
