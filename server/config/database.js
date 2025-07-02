@@ -72,11 +72,11 @@ const testConnection = async () => {
     await sequelize.authenticate();
     console.log(`✅ Database connection established successfully (${env} mode)`);
     
-    // 在开发环境下同步数据库表结构
-    if (env === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('📋 Database tables synchronized');
-    }
+    // 在开发环境下同步数据库表结构 - 暂时禁用，避免索引错误
+    // if (env === 'development') {
+    //   await sequelize.sync({ alter: true });
+    //   console.log('📋 Database tables synchronized');
+    // }
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error.message);
     process.exit(1);

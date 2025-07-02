@@ -140,14 +140,11 @@ const Customer = sequelize.define('Customer', {
   tableName: 'customers',
   comment: '客户信息表',
   indexes: [
-    // 创建索引优化查询性能
+    // 优化索引配置，避免过多索引
     { fields: ['assignedSalesperson'] },
     { fields: ['cooperationStatus'] },
-    { fields: ['priority'] },
     { fields: ['lastContactDate'] },
-    { fields: ['nextFollowUp'] },
-    { fields: ['assignedSalesperson', 'cooperationStatus'] },
-    { fields: ['assignedSalesperson', 'nextFollowUp'] }
+    { fields: ['assignedSalesperson', 'cooperationStatus'] }
   ]
 });
 
