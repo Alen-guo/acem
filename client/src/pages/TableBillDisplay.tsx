@@ -37,6 +37,7 @@ import type { ColumnsType } from 'antd/es/table';
 import * as XLSX from 'xlsx';
 
 import { tableDataAPI, billAPI } from '../services/api';
+import ScrollingText from '../components/ScrollingText';
 
 const { Title, Text } = Typography;
 const { MonthPicker, RangePicker } = DatePicker;
@@ -484,9 +485,22 @@ const TableBillDisplay: React.FC = () => {
 
   return (
     <div>
+      {/* 公司名称滚动展示 */}
+      <div style={{ marginBottom: 16 }}>
+        <ScrollingText 
+          text="四川婷毅轩家居有限公司" 
+          speed={15}
+          height={36}
+          backgroundColor="#e6f7ff"
+          textColor="#1890ff"
+          fontSize={14}
+        />
+      </div>
       <Title level={2}>
         <TableOutlined /> 月份表格展示
       </Title>
+
+      
 
       {/* <Alert
         message="Excel原始结构展示"

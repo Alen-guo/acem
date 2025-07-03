@@ -7,6 +7,12 @@ dotenv.config();
 
 const app = express();
 
+// 全局 CORS 配置，放在所有中间件和路由之前
+app.use(cors({
+  origin: true, // 允许所有来源（开发环境）
+  credentials: true,
+}));
+
 // 中间件配置
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -42,7 +48,7 @@ app.get('/api/health', (req, res) => {
     status: 'success',
     message: 'ACRM API 服务正常运行 - MySQL版本',
     database: 'MySQL',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 

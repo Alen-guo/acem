@@ -184,7 +184,7 @@ export interface DashboardStats {
 
 // 账单管理相关类型
 export interface Bill {
-    _id: string;
+    id: string;
     title: string;
     description?: string;
     amount: number;

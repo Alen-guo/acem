@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import ErrorBoundary from './components/ErrorBoundary';
+import ProtectedRoute from './components/ProtectedRoute';
+import PermissionGuard from './components/PermissionGuard';
+import { useAuthStore } from './store/authStore';
 
 // 导入所有页面组件
 import Layout from './components/Layout';
@@ -34,6 +37,17 @@ const queryClient = new QueryClient({
   },
 });
 
+// 应用初始化组件
+const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { checkAuth } = useAuthStore();
+
+  React.useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  return <>{children}</>;
+};
+
 function App() {
   console.log('App component is rendering...');
   
@@ -50,26 +64,36 @@ function App() {
             },
           }}
         >
-        <Router>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Layout />}>
-                <Route index element={<Navigate to="/dashboard" />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="customers" element={<CustomerList />} />
-                <Route path="customers/:id" element={<CustomerDetail />} />
-                <Route path="contacts" element={<ContactRecords />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="bills" element={<BillManagement />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="person-map" element={<PersonMap />} />
-                <Route path="excel-analysis" element={<ExcelAnalysisNew />} />
-                <Route path="insurance-match" element={<InsuranceMatch />} />
-                <Route path="table-bills" element={<TableBillDisplay />} />
-                <Route path="*" element={<div style={{padding: '20px'}}>页面不存在，请检查路由配置</div>} />
-              </Route>
-            </Routes>
-        </Router>
+        <AppInitializer>
+          <Router>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<Navigate to="/dashboard" />} />
+                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="customers" element={<CustomerList />} />
+                  <Route path="customers/:id" element={<CustomerDetail />} />
+                  <Route path="contacts" element={<ContactRecords />} />
+                  <Route path="profile" element={<Profile />} />
+                  <Route path="bills" element={<BillManagement />} />
+                  <Route path="reports" element={<Reports />} />
+                  <Route path="person-map" element={<PersonMap />} />
+                  <Route path="excel-analysis" element={
+                    <PermissionGuard permission="excel.analysis">
+                      <ExcelAnalysisNew />
+                    </PermissionGuard>
+                  } />
+                  <Route path="insurance-match" element={<InsuranceMatch />} />
+                  <Route path="table-bills" element={<TableBillDisplay />} />
+                  <Route path="*" element={<div style={{padding: '20px'}}>页面不存在，请检查路由配置</div>} />
+                </Route>
+              </Routes>
+          </Router>
+        </AppInitializer>
       </ConfigProvider>
     </QueryClientProvider>
     </ErrorBoundary>

@@ -18,6 +18,7 @@ import {
   MenuUnfoldOutlined,
   WalletOutlined,
   TableOutlined,
+  LockOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
@@ -27,7 +28,12 @@ const { Header, Sider, Content } = Layout;
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, logout, checkAuth, hasPermission } = useAuthStore();
+  
+  // 检查认证状态
+  React.useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
   
   // 默认用户信息（演示模式）
   const currentUser = user || {
@@ -40,48 +46,64 @@ const MainLayout: React.FC = () => {
 
   // 菜单项配置
   const menuItems: MenuProps['items'] = [
-    {
-      key: '/dashboard',
-      icon: <DashboardOutlined />,
-      label: '仪表板',
-      onClick: () => navigate('/dashboard'),
-    },
+    // {
+    //   key: '/dashboard',
+    //   icon: <DashboardOutlined />,
+    //   label: '仪表板',
+    //   onClick: () => navigate('/dashboard'),
+    // },
     {
       key: '/customers',
       icon: <UserOutlined />,
-      label: '客户管理',
+      label: (
+        <span>
+          客户管理 <LockOutlined style={{ fontSize: '12px', marginLeft: '4px', opacity: 0.6 }} />
+        </span>
+      ),
       onClick: () => navigate('/customers'),
     },
     {
       key: '/contacts',
       icon: <ContactsOutlined />,
-      label: '联系记录',
+      label: (
+        <span>
+          联系记录 <LockOutlined style={{ fontSize: '12px', marginLeft: '4px', opacity: 0.6 }} />
+        </span>
+      ),
       onClick: () => navigate('/contacts'),
     },
     {
       key: '/reports',
       icon: <BarChartOutlined />,
-      label: '报表分析',
+      label: (
+        <span>
+          报表分析 <LockOutlined style={{ fontSize: '12px', marginLeft: '4px', opacity: 0.6 }} />
+        </span>
+      ),
       onClick: () => navigate('/reports'),
     },
     {
       key: '/person-map',
       icon: <ShareAltOutlined />,
-      label: '人物关系图',
+      label: (
+        <span>
+          人物关系图 <LockOutlined style={{ fontSize: '12px', marginLeft: '4px', opacity: 0.6 }} />
+        </span>
+      ),
       onClick: () => navigate('/person-map'),
     },
-    {
-      key: '/insurance-match',
-      icon: <SafetyOutlined />,
-      label: '智能保险匹配',
-      onClick: () => navigate('/insurance-match'),
-    },
-    {
+    // {
+    //   key: '/insurance-match',
+    //   icon: <SafetyOutlined />,
+    //   label: '智能保险匹配',
+    //   onClick: () => navigate('/insurance-match'),
+    // },
+    ...(hasPermission('excel.analysis') ? [{
       key: '/excel-analysis',
       icon: <FileExcelOutlined />,
       label: 'Excel数据分析',
       onClick: () => navigate('/excel-analysis'),
-    },
+    }] : []),
     {
       key: '/bills',
       icon: <WalletOutlined />,
@@ -116,8 +138,11 @@ const MainLayout: React.FC = () => {
     {
       key: 'logout',
       icon: <LogoutOutlined />,
-      label: '登录',
-      onClick: () => navigate('/login'),
+      label: '退出登录',
+      onClick: () => {
+        logout();
+        navigate('/login');
+      },
     },
   ];
 
@@ -152,7 +177,7 @@ const MainLayout: React.FC = () => {
             fontWeight: 'bold',
           }}
         >
-          {collapsed ? 'CRM' : '信息管理'}
+          {collapsed ? 'ACRM' : 'ACRM信息系统'}
         </div>
         <Menu
           theme="dark"

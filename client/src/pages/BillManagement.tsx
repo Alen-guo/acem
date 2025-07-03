@@ -34,13 +34,17 @@ import {
   BarChartOutlined,
   CalendarOutlined,
   DollarOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
+import axios from 'axios';
 
 import { billAPI } from '../services/api';
 import { Bill, BillFormData, BillType, BillStatus } from '../types';
+import ScrollingText from '../components/ScrollingText';
+import { useAuthStore } from '../store/authStore';
 
 const { RangePicker } = DatePicker;
 const { Text, Title } = Typography;
@@ -50,6 +54,7 @@ const BillManagement: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchForm] = Form.useForm();
   const [billForm] = Form.useForm();
+  const { hasPermission } = useAuthStore();
 
   // 状态管理
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -198,29 +203,36 @@ const BillManagement: React.FC = () => {
       width: 120,
       render: (_, record: Bill) => (
         <Space size="small">
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            size="small"
-          >
-            编辑
-          </Button>
-          <Popconfirm
-            title="确定要删除这条账单记录吗？"
-            onConfirm={() => deleteBillMutation.mutate(record._id)}
-            okText="确定"
-            cancelText="取消"
-          >
+          {hasPermission('bills.create') && (
             <Button
               type="link"
-              danger
-              icon={<DeleteOutlined />}
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
               size="small"
             >
-              删除
+              编辑
             </Button>
-          </Popconfirm>
+          )}
+          {hasPermission('bills.create') && (
+            <Popconfirm
+              title="确定要删除这条账单记录吗？"
+              onConfirm={() => deleteBillMutation.mutate(record.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button
+                type="link"
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+              >
+                删除
+              </Button>
+            </Popconfirm>
+          )}
+          {!hasPermission('bills.create') && (
+            <span style={{ color: '#999', fontSize: '12px' }}>无权限</span>
+          )}
         </Space>
       ),
     },
@@ -294,7 +306,7 @@ const BillManagement: React.FC = () => {
         delete (formData as any).date;
       }
       if (editingBill) {
-        updateBillMutation.mutate({ id: editingBill._id, data: formData });
+        updateBillMutation.mutate({ id: editingBill.id, data: formData });
       } else {
         createBillMutation.mutate(formData);
       }
@@ -305,11 +317,54 @@ const BillManagement: React.FC = () => {
 
   const stats = statsData?.data;
 
+  // 在组件内部添加导出处理函数
+  const handleExportBills = async () => {
+    try {
+      // 构造导出参数，和当前筛选条件保持一致
+      const params: any = { ...searchParams };
+      // 处理日期范围
+      if (dateMode === 'range' && searchForm.getFieldValue('dateRange')) {
+        const [start, end] = searchForm.getFieldValue('dateRange') || [];
+        if (start && end) {
+          params.startDate = start.startOf('day').toISOString();
+          params.endDate = end.endOf('day').toISOString();
+          delete params.year;
+          delete params.month;
+        }
+      }
+      const res = await axios.get('/api/bills/export', {
+        params,
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', '账单数据.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      message.error('导出失败');
+    }
+  };
+
   return (
     <div>
+      <div style={{ marginBottom: 16 }}>
+        <ScrollingText 
+          text="四川婷毅轩家居有限公司" 
+          speed={15}
+          height={36}
+          backgroundColor="#e6f7ff"
+          textColor="#1890ff"
+          fontSize={14}
+        />
+      </div>
       <Title level={2}>
         <DollarOutlined /> 账单管理
       </Title>
+
+      
 
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -461,9 +516,22 @@ const BillManagement: React.FC = () => {
       <Card
         title="账单列表"
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增账单
-          </Button>
+          <Space>
+            {hasPermission('bills.export') && (
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={handleExportBills}
+                disabled={billsData?.data?.total === 0}
+              >
+                导出Excel
+              </Button>
+            )}
+            {hasPermission('bills.create') && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                新增账单
+              </Button>
+            )}
+          </Space>
         }
       >
         <Table

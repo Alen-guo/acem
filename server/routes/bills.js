@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Bill = require('../models/Bill');
 const { Op } = require('sequelize');
+const ExcelJS = require('exceljs');
 
 /**
  * 账单管理路由
@@ -283,6 +284,66 @@ router.get('/monthly-sheets', async (req, res) => {
   }
 });
 
+// 导出账单为Excel - 必须在 /:id 路由之前
+router.get('/export', async (req, res) => {
+  try {
+    const {
+      type,
+      category,
+      month,
+      year,
+      status,
+      startDate,
+      endDate
+    } = req.query;
+    const where = {};
+    if (type) where.type = type;
+    if (category) where.category = category;
+    if (status) where.status = status;
+    if (startDate && endDate) {
+      where.billDate = {
+        [Op.between]: [startDate, endDate]
+      };
+    } else if (month) {
+      where.month = parseInt(month);
+      if (year) where.year = parseInt(year);
+    } else if (year) {
+      where.year = parseInt(year);
+    }
+    const bills = await Bill.findAll({ where, order: [['billDate', 'DESC']] });
+
+    // 创建Excel
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('账单数据');
+    worksheet.columns = [
+      { header: '标题', key: 'title', width: 20 },
+      { header: '类型', key: 'type', width: 10 },
+      { header: '金额', key: 'amount', width: 10 },
+      { header: '分类', key: 'category', width: 15 },
+      { header: '日期', key: 'billDate', width: 15 },
+      { header: '状态', key: 'status', width: 10 },
+      { header: '备注', key: 'notes', width: 20 },
+    ];
+    bills.forEach(bill => {
+      worksheet.addRow({
+        title: bill.title,
+        type: bill.type,
+        amount: bill.amount,
+        category: bill.category,
+        billDate: bill.billDate ? new Date(bill.billDate).toISOString().slice(0, 10) : '',
+        status: bill.status,
+        notes: bill.notes || '',
+      });
+    });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=bills-data.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: '导出失败', error: err.message });
+  }
+});
+
 // 获取账单详情 - 移到最后，避免路由冲突
 router.get('/:id', async (req, res) => {
   try {
@@ -517,5 +578,7 @@ function calculateColumnWidth(header, data) {
     return Math.min(Math.max(calculatedWidth, 80), 250);
   }
 }
+
+
 
 module.exports = router; 
